@@ -1,4 +1,11 @@
 
+# executable link
+sauce
+
+package-lock.json
+js/
+*.js
+*.dylib
 .DS_Store
 
 # Logs
