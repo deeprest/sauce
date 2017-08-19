@@ -1,15 +1,17 @@
 # Sauce
-A simple Node.js C++ build tool
+A Node.js C++ build tool
 
-* Coffeescript
-* Nodejs
-* Gulp
-* Clang++
+* Coffeescript (pretty javascript)
+* Nodejs (non-blocking I/O and server functionality)
+* Gulp (streaming builds, custom tasks)
+* Clang++ (preferred because the node module 'libclang' can be used to generate script bindings)
 
-## Features
-- non-blocking pre-build and post-build steps, such as copying binary assets for a packaged build
-- optionally watches source directories for changes and triggers a build (full rebuild for now)
-- (devs) optionally can watch its own source and "self-recompile"
+* self-compiling. Watches for changes to the build script (itself), recompiles the coffee source, and runs everything else in a separate process
+* auto-builds. Watches for changes to source/header files and builds the executable on-demand (full rebuild for now)
+* runs template task; for custom preprocessing of source. (Mustache templates)
+* generates script bindings from C++ headers. (AngelScript)
+* copies binary assets for a packaged build. (TODO) packages build
+
 
 ## Todo
 - incremental builds. compile object files on demand and incremental linking.

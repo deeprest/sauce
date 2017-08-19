@@ -26,5 +26,13 @@
   "scripts": {
     "postinstall": "ln -s ./node_modules/.bin/gulp sauce; npm run build",
     "build": "coffee --compile gulpfile.coffee; coffee --compile --output js/ src/"
-  }
+  },
+  "keywords": [
+    "c++",
+    "gulp",
+    "tool",
+    "game",
+    "gamedev",
+    "gamedevelopment"
+  ],
 }
