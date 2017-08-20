@@ -17,7 +17,6 @@ rename = require "gulp-rename"
 
 # MUSTACHERY
 module.exports = ->
-
   CreateTask_mustache = ( params ) ->
     gulp.task params.taskname, (cb) ->
       gulp.src( params.templatefilename, {cwd:config.dirSource} )

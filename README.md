@@ -14,6 +14,7 @@ A Node.js C++ build tool
 
 
 ## Todo
+- load project/build config from json
 - incremental builds. compile object files on demand and incremental linking.
 
 ## Note

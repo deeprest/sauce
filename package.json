@@ -2,6 +2,7 @@
   "name": "sauce",
   "version": "0.2.0",
   "dependencies": {
+    "cson": "^4.1.0",
     "ffi": "2.1.0",
     "glob": "^7.0.5",
     "gulp": "3.9.1",
@@ -17,7 +18,8 @@
     "libclang": "^0.0.11",
     "ref": "^1.3.2",
     "shelljs": "^0.7.3",
-    "streamqueue": "^1.1.1"
+    "streamqueue": "^1.1.1",
+    "yargs": "^8.0.2"
   },
   "devDependencies": {
     "gulp": "^3.9.1"
@@ -29,10 +31,10 @@
   },
   "keywords": [
     "c++",
-    "gulp",
+    "build",
     "tool",
+    "gulp",
     "game",
-    "gamedev",
-    "gamedevelopment"
+    "gamedev"
   ]
 }
