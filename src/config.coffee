@@ -12,7 +12,7 @@ module.exports = ->
   this.dirObj = path.resolve( this.dirBuildRoot, '.obj')
   this.dirTool = path.resolve( this.dirRoot, 'tool')
   this.dirAsset = path.resolve( this.dirRoot, 'asset')
-  this.outputExecutableName = 'meatball'
+  this.outputExecutableName = 'spaghetti'
   this.compilerDefines = [ '-DCONFIG_DEBUG', '-DGL_GLEXT_PROTOTYPES'] #'-DAS_USE_NAMESPACE' ]
   this.includeDirectories = [
     '-I' + path.resolve( this.dirLibrary, this.platform,'include')

@@ -70,6 +70,7 @@ module.exports = ->
               '-langelscript'
               '-lGL'
               # '-lGLEW'
+              '-lphysfs'
             ]
             #clangArgs.push sourceFiles.join(' ')
             #LinkerArgs.push config.linkerDirectories
@@ -88,6 +89,7 @@ module.exports = ->
               '-lSDL2'
               #'-lSDL2_image'
               '-langelscript'
+              '-lphysfs'
             ]
             Frameworks = [
               '-framework CoreVideo'
