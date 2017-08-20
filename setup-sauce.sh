@@ -1,21 +1,23 @@
 #!/usr/bin/env bash
 
-
 function clang
 {
+  #TODO: check for clang
   if [[ "$OSTYPE" == "linux-gnu" ]]; then
-    sudo apt-get install clang
+    echo clang
+    # sudo apt-get install clang
     # libclang??
   elif [[ "$OSTYPE" == "darwin"* ]]; then
     brew install llvm
   fi
 }
 
-function node
+function nodejs
 {
+  #TODO: check for existing install of node
   if [[ "$OSTYPE" == "linux-gnu" ]]; then
-    #TODO: check for existing install of node
-    sudo apt-get install nodejs #npm
+    echo nodejs
+    # sudo apt-get install nodejs #npm
   elif [[ "$OSTYPE" == "darwin"* ]]; then
     brew install node@6 npm
     # curl https://nodejs.org/dist/v4.3.0/node-v4.3.0.pkg > node.pkg
@@ -26,17 +28,17 @@ function node
 function sauce
 {
   #clang
-  #node
+  #nodejs
   if [[ "$OSTYPE" == "linux-gnu" ]]; then
     npm install .
-    ./coffee.sh
+    npm run build
   elif [[ "$OSTYPE" == "darwin"* ]]; then
     ln -s $(brew --prefix llvm)/lib/libclang.dylib ./libclang.dylib
     npm install .
-    ./coffee.sh
+    npm run build
   fi
 }
 
-clang
-node
+#clang
+#nodejs
 sauce
