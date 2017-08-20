@@ -36,3 +36,7 @@ module.exports = ->
   this.WatchGlob = '{**/*.cpp,**/*.h,**/*.mustache}'
   #this.WatchGlob = 'Entity.h'
   this.AssetGlob = '**/*@(.png|.ogg|.json|.as|.frag|.vert)'
+  this.templatefilename = '*.mustache'
+  this.rename = { extname: ''}
+  this.context = { Components: [] }
+  return this # be sure to return an object
