@@ -12,7 +12,7 @@ module.exports = ->
   this.dirObj = path.resolve( this.dirBuildRoot, '.obj')
   this.dirTool = path.resolve( this.dirRoot, 'tool')
   this.dirAsset = path.resolve( this.dirRoot, 'asset')
-  this.outputExecutableName = 'spaghetti'
+  this.outputExecutableName = 'defaultExecutableName'
   this.compilerDefines = [ '-DCONFIG_DEBUG', '-DGL_GLEXT_PROTOTYPES'] #'-DAS_USE_NAMESPACE' ]
   this.includeDirectories = [
     '-I' + path.resolve( this.dirLibrary, this.platform,'include')
@@ -30,13 +30,16 @@ module.exports = ->
     '-L/usr/local/lib'
     '-L/usr/lib'
   ]
-  # globs only support forward slashes
-  #SourceGlobArray = [ '**/*.cpp', 'poop' ] # there must be a second item for the brackets in the glob
-  this.SourceGlob = '**/*.cpp'
-  this.WatchGlob = '{**/*.cpp,**/*.h,**/*.mustache}'
-  #this.WatchGlob = 'Entity.h'
-  this.AssetGlob = '**/*@(.png|.ogg|.json|.as|.frag|.vert)'
-  this.templatefilename = '*.mustache'
-  this.rename = { extname: ''}
-  this.context = { Components: [] }
+  this.sourceGlob = '**/*.cpp'
+  this.watchGlob = '{**/*.cpp,**/*.h,**/*.mustache}'
+  this.assetGlob = '**/*@(.png|.ogg|.json|.as|.frag|.vert)'
+
+  this.mustache = {
+    sourceGlob: '*.mustache'
+    rename: { extname: ''}
+    context: { Components: [] }
+  }
+  # this.templatefilename = '*.mustache'
+  # this.rename = { extname: ''}
+  # this.context = { Components: [] }
   return this # be sure to return an object

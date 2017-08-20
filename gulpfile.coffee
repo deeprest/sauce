@@ -1,29 +1,29 @@
-argv = require('yargs').argv
 path = require 'path'
 fs = require 'fs'
 os = require 'os'
-child_process = require 'child_process'
+# child_process = require 'child_process'
+exec = (require 'child_process').exec
+
+yargs = require('yargs').argv
+cson = require 'cson'
+#require 'shelljs/global'
+glob = require 'glob'  # nee
+streamqueue = require 'streamqueue'
+
 gulp = require 'gulp'
 gutil = require 'gulp-util'
-cson = require 'cson'
-require 'shelljs/global'
-exec = (require 'child_process').exec
-glob = require 'glob'  # needed? gulp uses glob already
-rename = require "gulp-rename"
-streamqueue = require 'streamqueue'
 rename = require "gulp-rename"
 mustache = require "gulp-mustache"
-libclang = require 'libclang'
-
 format = require 'gulp-clang-format'
 watch = require 'gulp-watch'
 replace = require 'gulp-replace'
 
+libclang = require 'libclang'
+
 config = new (require './js/config.js')()
-# (require './js/watch.js' )()
-# (require './js/build.js' )()
 #(require './js/binding.js')()
 
+# merge two objects; latter overwrites conflicting properties of the former.
 merge = (xs...) ->
   if xs?.length > 0
     tap {}, (m)-> m[k]=v for k,v of x for x in xs
@@ -39,10 +39,10 @@ gulp.task 'default', (cb) ->
 
 
 gulp.task 'config', ->
-  if argv.config == undefined
-    argv.config = 'example.cson'
-  console.log argv.config
-  rs = fs.createReadStream argv.config, {flags:'r',encoding:'utf8'}
+  if yargs.config == undefined
+    yargs.config = 'example.cson'
+  console.log yargs.config
+  rs = fs.createReadStream yargs.config, {flags:'r',encoding:'utf8'}
   buffer = ''
   rs.on 'error', (err)->  console.log 'error: '+err
   rs.on 'data', (chunk) ->  buffer += chunk
@@ -54,14 +54,14 @@ gulp.task 'config', ->
 
 
 gulp.task 'watch-format', ->
-  watch config.WatchGlob, {cwd:path.resolve(config.dirSource), ignoreInitial:false, awaitWriteFinish:true }
+  watch config.watchGlob, {cwd:path.resolve(config.dirSource), ignoreInitial:false, awaitWriteFinish:true }
   .pipe format.format 'file'
   .pipe replace /^(\s+)(else)\s+(if)/m, '$1$2\n$1$3'
   .pipe gulp.dest path.resolve config.dirSource
 
 # watch assets for changes, and copy to executable's working directory
 gulp.task 'watch-assets', ->
-  watch config.AssetGlob, {cwd:path.resolve(config.dirAsset), ignoreInitial:false, awaitWriteFinish:true }
+  watch config.assetGlob, {cwd:path.resolve(config.dirAsset), ignoreInitial:false, awaitWriteFinish:true }
   .pipe gulp.dest( config.dirOutput )
 
 # watch mustache templates for changes
@@ -72,16 +72,16 @@ gulp.task 'watch-mustache', ->
 
 # watch source files and build on demand
 gulp.task 'watch-source', ->
-  watcher = gulp.watch config.WatchGlob, {cwd:path.resolve(config.dirSource)}, [ 'build' ]
+  watcher = gulp.watch config.watchGlob, {cwd:path.resolve(config.dirSource)}, [ 'build' ]
   watcher.on 'change', (event) ->
     console.log 'Source file ' + event.path + ' was ' + event.type + ', building...'
 
 
 
 gulp.task 'mustache-source', ['config'], (cb) ->
-  gulp.src( config.templatefilename, {cwd:config.dirSource} )
-  .pipe( mustache( config.context ) )
-  .pipe( rename( config.rename ))
+  gulp.src( config.mustache.sourceGlob, {cwd:config.dirSource} )
+  .pipe( mustache( config.mustache.context ) )
+  .pipe( rename( config.mustache.rename ))
   .pipe( gulp.dest( config.dirGeneratedSourceOutput ))
 
 
@@ -115,10 +115,10 @@ gulp.task 'build', ['prebuild'], (cb) ->
     if err then console.error err
 
     # copy assets over
-    gulp.src config.AssetGlob, {cwd:path.resolve(config.dirAsset), ignoreInitial:false, awaitWriteFinish:true }
+    gulp.src config.assetGlob, {cwd:path.resolve(config.dirAsset), ignoreInitial:false, awaitWriteFinish:true }
     .pipe gulp.dest( config.dirOutput )
 
-    sourceFiles = glob.sync path.resolve(config.dirSource,config.SourceGlob)
+    sourceFiles = glob.sync path.resolve(config.dirSource,config.sourceGlob)
     clangArgs = [
       '-g'
       '-x c++'

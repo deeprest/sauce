@@ -1,12 +1,14 @@
-outputExecutableName: 'appname'
-templatefilename: '*.mustache'
-rename:
-  extname: ""
-context:
-  Components: [
-    {type:'Transform'}
-    {type:'Camera'}
-    {type:'Mesh'}
-    {type:'MeshView'}
-    {type:'Collider'}
-  ]
+outputExecutableName: 'example'
+mustache: {
+  sourceGlob: '*.mustache'
+  rename: { extname: ''}
+  context: {
+    Components: [
+      {type:'Transform'}
+      {type:'Camera'}
+      {type:'Mesh'}
+      {type:'MeshView'}
+      {type:'Collider'}
+    ]
+  }
+}
