@@ -164,11 +164,11 @@ gulp.task 'build', ['prebuild'], (cb) ->
           '-framework CoreVideo'
           '-framework GLKit'
           '-framework OpenGL'
-          '-framework IOKit'
+          '-framework IOKit' # physfs
           # '-framework ForceFeedback'
           # '-lobjc'
           # '-framework Cocoa'
-          # '-framework Carbon'
+          '-framework Carbon' # physfs
           # '-framework CoreAudio'
           # '-framework AudioToolbox'
           # '-framework AudioUnit'
