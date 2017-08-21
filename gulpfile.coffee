@@ -9,6 +9,8 @@ cson = require 'cson'
 #require 'shelljs/global'
 glob = require 'glob'  # nee
 streamqueue = require 'streamqueue'
+libclang = require 'libclang'
+merge = require 'deepmerge'
 
 gulp = require 'gulp'
 gutil = require 'gulp-util'
@@ -18,16 +20,9 @@ format = require 'gulp-clang-format'
 watch = require 'gulp-watch'
 replace = require 'gulp-replace'
 
-libclang = require 'libclang'
 
 config = new (require './js/config.js')()
 #(require './js/binding.js')()
-
-# merge two objects; latter overwrites conflicting properties of the former.
-merge = (xs...) ->
-  if xs?.length > 0
-    tap {}, (m)-> m[k]=v for k,v of x for x in xs
-tap = (o, fn) -> fn(o); o
 
 
 gulp.task 'default', (cb) ->
@@ -61,7 +56,7 @@ gulp.task 'watch-format', ->
 
 # watch assets for changes, and copy to executable's working directory
 gulp.task 'watch-assets', ->
-  watch config.assetGlob, {cwd:path.resolve(config.dirAsset), ignoreInitial:false, awaitWriteFinish:true }
+  watch config.project.assetGlob, {cwd:path.resolve(config.dirAsset), ignoreInitial:false, awaitWriteFinish:true }
   .pipe gulp.dest( config.dirOutput )
 
 # watch mustache templates for changes
@@ -96,16 +91,16 @@ gulp.task 'prebuild', ['mustache-source'], ->
       # console.log 'Creating platform build directory..'
       # if err then console.error err
       fs.mkdir config.dirOutput, 0o0775, (err)->
-        fs.stat path.resolve(config.dirOutput, config.outputExecutableName), (err,stats)->
+        fs.stat path.resolve(config.dirOutput, config.project.outputExecutableName), (err,stats)->
           # console.log 'Removing existing target executable...'
           # if err then console.error err
-          fs.unlink path.resolve(config.dirOutput, config.outputExecutableName), ->
+          fs.unlink path.resolve(config.dirOutput, config.project.outputExecutableName), ->
             return
     if config.platform=='darwin'
-      fs.stat path.resolve(config.dirOutput, config.outputExecutableName+'.dSYM'), (err,stats)->
+      fs.stat path.resolve(config.dirOutput, config.project.outputExecutableName+'.dSYM'), (err,stats)->
         return
         # if err then console.error err
-      fs.unlink path.resolve(config.dirOutput, config.outputExecutableName+'.dSYM'), (err)->
+      fs.unlink path.resolve(config.dirOutput, config.project.outputExecutableName+'.dSYM'), (err)->
         return
         # if err then console.error err
 
@@ -115,72 +110,19 @@ gulp.task 'build', ['prebuild'], (cb) ->
     if err then console.error err
 
     # copy assets over
-    gulp.src config.assetGlob, {cwd:path.resolve(config.dirAsset), ignoreInitial:false, awaitWriteFinish:true }
+    gulp.src config.project.assetGlob, {cwd:path.resolve(config.dirAsset), ignoreInitial:false, awaitWriteFinish:true }
     .pipe gulp.dest( config.dirOutput )
 
-    sourceFiles = glob.sync path.resolve(config.dirSource,config.sourceGlob)
-    clangArgs = [
-      '-g'
-      '-x c++'
-      '-std=c++11'
-      #'-ferror-limit' '-fno-strict-aliasing' '-fno-rtti' '-fno-exceptions'
-    ]
-    # config.platform specific flags
+    target = undefined
+    sourceFiles = glob.sync path.resolve(config.dirSource,config.project.sourceGlob)
+
     switch config.platform
-
       when 'linux'
-        LinkerArgs = [
-          '-lstdc++'
-          '-lm'
-          '-lpthread'
-          '-lSDL2main'
-          '-lSDL2'
-          #'-lSDL2_image'
-          '-langelscript'
-          '-lGL'
-          # '-lGLEW'
-          '-lphysfs'
-        ]
-        #clangArgs.push sourceFiles.join(' ')
-        #LinkerArgs.push config.linkerDirectories
-        #clangArgs.push '-Wl,' + LinkerArgs.join(',')
-        #clangArgs.push config.compilerDefines.join(' ')
-        #clangArgs.push config.includeDirectories.join(' ')
+        target = config.target.linux
         break
-
       when 'darwin'
-        LinkerArgs = [
-          '-lstdc++'
-          '-lm'
-          '-liconv'
-          '-lpthread'
-          '-lSDL2main'
-          '-lSDL2'
-          #'-lSDL2_image'
-          '-langelscript'
-          '-lphysfs'
-        ]
-        Frameworks = [
-          '-framework CoreVideo'
-          '-framework GLKit'
-          '-framework OpenGL'
-          '-framework IOKit' # physfs
-          # '-framework ForceFeedback'
-          # '-lobjc'
-          # '-framework Cocoa'
-          '-framework Carbon' # physfs
-          # '-framework CoreAudio'
-          # '-framework AudioToolbox'
-          # '-framework AudioUnit'
-        ]
-        #clangArgs.push sourceFiles.join(' ')
-        #LinkerArgs.push config.linkerDirectories
-        #clangArgs.push '-Wl,' + LinkerArgs.join(',')
-        #clangArgs.push config.compilerDefines.join(' ')
-        #clangArgs.push Frameworks.join(' ')
-        #clangArgs.push config.includeDirectories.join(' ')
+        target = config.target.darwin
         break
-
       when 'windows'
         ###
         clangArgs.push '-std=c++11'
@@ -197,29 +139,26 @@ gulp.task 'build', ['prebuild'], (cb) ->
         clangArgs.push '-isystem '+ path.resolve('C:/','MinGW','lib','gcc','mingw32','4.9.3','include','c++')
         clangArgs.push '-isystem '+ path.resolve('C:/','MinGW','lib','gcc','mingw32','4.9.3','include','c++','mingw32')
         gulp.src( path.resolve(config.dirLibrary, 'SDL-2.0.4-10002','build','.libs','SDL2.dll'))
-        .pipe( gulp.dest( path.resolve(config.dirOutput) ) )
-        clangArgs.push config.compilerDefines.join(' ')
-        clangArgs.push config.includeDirectories.join(' ')
-        LinkerArgs.push config.linkerDirectories
-        clangArgs.push '-Wl,' + LinkerArgs.join(',')
-        clangArgs.push sourceFiles.join(' ')
         ###
         break
-
       else
         console.log "platform "+ config,platform +"not supported by build script!"
+
+    # console.log target
+    target = merge config.project, target
+    console.log target
 
     console.log 'Compiling for platform: ' + config.platform
     # TODO: incremental rebuilding
     # clangCommand = ['clang++ -S -save-temps -g', clangArgs.join(' ')].join(' ')
 
+    comp = []
+    #   '-g'
+    #   '-x c++'
+    #   '-std=c++11'
+    # ]
 
-    comp = [
-      '-g'
-      '-x c++'
-      '-std=c++11'
-    ]
-    comp.push config.compilerDefines.join(' ')
+    comp.push target.compilerDefines.join(' ')
     comp.push config.includeDirectories.join(' ')
 
     fs.mkdir config.dirObj, (err) ->
@@ -236,11 +175,12 @@ gulp.task 'build', ['prebuild'], (cb) ->
           console.log parseInt( 100*(1-count/total) ).toString()+'%'
           if count == 0
             link = []
+            LinkerArgs = target.LinkerArgs
             LinkerArgs.push config.linkerDirectories
             link.push '-Wl,' + LinkerArgs.join(',')
             if config.platform == 'darwin'
               link.push Frameworks.join(' ')
-            linkCommand = ['clang++ -g', path.resolve( config.dirObj,'*.o'), link.join(' '),  '-o', path.resolve(config.dirOutput, config.outputExecutableName) ].join(' ')
+            linkCommand = ['clang++ -g', path.resolve( config.dirObj,'*.o'), link.join(' '),  '-o', path.resolve(config.dirOutput, config.project.outputExecutableName) ].join(' ')
             #console.log linkCommand
             exec linkCommand, (err, stdout, stderr) ->
               if err
@@ -248,7 +188,7 @@ gulp.task 'build', ['prebuild'], (cb) ->
                 return
               else
                 if config.platform == 'darwin'
-                  exec 'dsymutil -o '+path.resolve(config.dirOutput, config.outputExecutableName)+'.dSYM '+path.resolve(config.dirOutput, config.outputExecutableName), (err, stdout, stderr) ->
+                  exec 'dsymutil -o '+path.resolve(config.dirOutput, config.project.outputExecutableName)+'.dSYM '+path.resolve(config.dirOutput, config.project.outputExecutableName), (err, stdout, stderr) ->
                     if err then console.error err
                     cb()
                 else

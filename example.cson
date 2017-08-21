@@ -1,8 +1,42 @@
-outputExecutableName: 'example'
-mustache: {
+project:
+  outputExecutableName: 'example'
+  compilerDefines: [
+    '-DCONFIG_DEBUG'
+    '-DGL_GLEXT_PROTOTYPES'
+  ]
+  LinkerArgs: [
+    '-lstdc++'
+    '-lm'
+    '-lpthread'
+    '-lSDL2main'
+    '-lSDL2'
+    #'-lSDL2_image'
+    '-langelscript'
+    '-lphysfs'
+  ]
+  sourceGlob: '**/*.cpp'
+  watchGlob: '{**/*.cpp,**/*.h,**/*.mustache}'
+  assetGlob: '**/*@(.png|.ogg|.json|.as|.frag|.vert)'
+target:
+  linux:
+    LinkerArgs: [ '-lGL' ]
+  darwin:{
+    LinkerArgs: [ '-liconv' ]
+    Frameworks: [
+      '-framework CoreVideo'
+      '-framework GLKit'
+      '-framework OpenGL'
+      '-framework IOKit' # physfs
+      '-framework Carbon' # physfs
+      # '-framework CoreAudio'
+      # '-framework AudioToolbox'
+      # '-framework AudioUnit'
+    ]
+  }
+mustache:
   sourceGlob: '*.mustache'
   rename: { extname: ''}
-  context: {
+  context:
     Components: [
       {type:'Transform'}
       {type:'Camera'}
@@ -10,5 +44,3 @@ mustache: {
       {type:'MeshView'}
       {type:'Collider'}
     ]
-  }
-}

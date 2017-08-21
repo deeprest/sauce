@@ -2,6 +2,7 @@ os = require 'os'
 path = require 'path'
 
 module.exports = ->
+  # config expressions
   this.platform = os.platform()
   this.dirRoot = path.resolve( process.cwd(), '..', '..')
   this.dirSource = path.resolve( this.dirRoot, 'code')
@@ -12,8 +13,6 @@ module.exports = ->
   this.dirObj = path.resolve( this.dirBuildRoot, '.obj')
   this.dirTool = path.resolve( this.dirRoot, 'tool')
   this.dirAsset = path.resolve( this.dirRoot, 'asset')
-  this.outputExecutableName = 'defaultExecutableName'
-  this.compilerDefines = [ '-DCONFIG_DEBUG', '-DGL_GLEXT_PROTOTYPES'] #'-DAS_USE_NAMESPACE' ]
   this.includeDirectories = [
     '-I' + path.resolve( this.dirLibrary, this.platform,'include')
     #'-I' + path.resolve(dirLibrary,platform,'include','SDL2')
@@ -30,16 +29,74 @@ module.exports = ->
     '-L/usr/local/lib'
     '-L/usr/lib'
   ]
-  this.sourceGlob = '**/*.cpp'
-  this.watchGlob = '{**/*.cpp,**/*.h,**/*.mustache}'
-  this.assetGlob = '**/*@(.png|.ogg|.json|.as|.frag|.vert)'
 
+  # config CSON (only values, no expressions)
   this.mustache = {
     sourceGlob: '*.mustache'
     rename: { extname: ''}
     context: { Components: [] }
   }
-  # this.templatefilename = '*.mustache'
-  # this.rename = { extname: ''}
-  # this.context = { Components: [] }
+  # project config is merged with target
+  this.project = {
+    outputExecutableName: 'default'
+    compilerDefines: [
+      '-g'
+      '-x c++'
+      '-std=c++11'
+      # '-DCONFIG_DEBUG'
+      # '-DGL_GLEXT_PROTOTYPES'
+    ]
+    LinkerArgs: [
+      # '-lstdc++'
+      # '-lm'
+      # '-lpthread'
+    ]
+    sourceGlob: '**/*.cpp'
+    watchGlob: '{**/*.cpp,**/*.h,**/*.mustache}'
+    assetGlob: '**/*@(.png|.ogg|.json|.as|.frag|.vert)'
+  }
+  this.target = {
+    linux: {
+      compilerDefines: []
+      LinkerArgs: [
+          # '-lstdc++'
+          # '-lm'
+          # '-lpthread'
+          # '-lSDL2main'
+          # '-lSDL2'
+          # '-lSDL2_image'
+          # '-langelscript'
+          # '-lGL'
+          # '-lphysfs'
+      ]
+    }
+    darwin:{
+      compilerDefines: []
+      LinkerArgs:[
+        # '-lstdc++'
+        # '-lm'
+        # '-liconv'
+        # '-lpthread'
+        # '-lSDL2main'
+        # '-lSDL2'
+        # #'-lSDL2_image'
+        # '-langelscript'
+        # '-lphysfs'
+      ]
+      Frameworks:[
+        # '-framework CoreVideo'
+        # '-framework GLKit'
+        # '-framework OpenGL'
+        # '-framework IOKit' # physfs
+        # '-framework ForceFeedback'
+        # '-framework Cocoa'
+        # '-framework Carbon' # physfs
+        # '-framework CoreAudio'
+        # '-framework AudioToolbox'
+        # '-framework AudioUnit'
+      ]
+    }
+
+  }
+
   return this # be sure to return an object
