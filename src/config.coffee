@@ -7,15 +7,14 @@ module.exports = ->
   this.dirRoot = path.resolve( process.cwd(), '..', '..')
   this.dirSource = path.resolve( this.dirRoot, 'code')
   this.dirGeneratedSourceOutput = path.resolve( this.dirSource, 'mustached')
-  this.dirLibrary = path.resolve( this.dirRoot, 'external')
+  this.dirExternal = path.resolve( this.dirRoot, 'external', this.platform )
   this.dirBuildRoot = path.resolve( this.dirRoot, 'dev-build')
   this.dirOutput = path.resolve( this.dirBuildRoot, this.platform)
   this.dirObj = path.resolve( this.dirBuildRoot, '.obj')
   this.dirTool = path.resolve( this.dirRoot, 'tool')
   this.dirAsset = path.resolve( this.dirRoot, 'asset')
   this.includeDirectories = [
-    '-I' + path.resolve( this.dirLibrary, this.platform,'include')
-    #'-I' + path.resolve(dirLibrary,platform,'include','SDL2')
+    '-I' + path.resolve( this.dirExternal, 'include')
     '-I' + path.resolve( this.dirSource )
     '-I' + path.resolve( this.dirGeneratedSourceOutput )
     '-I' + path.resolve( this.dirSource,'angelscript')
@@ -24,8 +23,8 @@ module.exports = ->
     '-I/usr/include'
   ]
   this.linkerDirectories = [
-    '-L' + path.resolve( this.dirLibrary, this.platform )
-    '-L' + path.resolve( this.dirLibrary, this.platform, 'lib' )
+    '-L' + path.resolve( this.dirExternal )
+    '-L' + path.resolve( this.dirExternal, 'lib' )
     '-L/usr/local/lib'
     '-L/usr/lib'
   ]
@@ -52,6 +51,7 @@ module.exports = ->
       # '-lpthread'
     ]
     sourceGlob: '**/*.cpp'
+    externalSourceGlob: '**/*.cpp'
     watchGlob: '{**/*.cpp,**/*.h,**/*.mustache}'
     assetGlob: '**/*@(.png|.ogg|.json|.as|.frag|.vert)'
   }

@@ -13,24 +13,20 @@ libclang = require 'libclang'
 merge = require 'deepmerge'
 
 gulp = require 'gulp'
-gutil = require 'gulp-util'
 rename = require "gulp-rename"
 mustache = require "gulp-mustache"
-format = require 'gulp-clang-format'
+# format = require 'gulp-clang-format'
 watch = require 'gulp-watch'
 replace = require 'gulp-replace'
-
+gulpcson = require 'gulp-cson'
+print = require 'gulp-print'
 
 config = new (require './js/config.js')()
 #(require './js/binding.js')()
 
 
 gulp.task 'default', (cb) ->
-    gulp.start 'build'
-    #gulp.start 'watch-source'
-    #gulp.start 'watch-mustache'
-    # gulp.start 'watch-format'  # NOTE: there is an issue with reformatted source triggering a new build endlessly
-    #gulp.start 'watch-assets'
+  gulp.start 'build'
 
 
 gulp.task 'config', ->
@@ -44,43 +40,46 @@ gulp.task 'config', ->
   rs.on 'end', ->
     obj = cson.parse buffer
     config = merge config, obj
-    console.log config
+    # console.log config
 
 
+gulp.task 'autobuild', ['config'], ->
+  watch config.project.watchGlob, {cwd:path.resolve(config.dirSource)}, [ 'build' ]
+  .pipe print( (filepath)=> return 'Build triggered from change: '+filepath; )
 
-gulp.task 'watch-format', ->
-  watch config.watchGlob, {cwd:path.resolve(config.dirSource), ignoreInitial:false, awaitWriteFinish:true }
-  .pipe format.format 'file'
-  .pipe replace /^(\s+)(else)\s+(if)/m, '$1$2\n$1$3'
-  .pipe gulp.dest path.resolve config.dirSource
 
-# watch assets for changes, and copy to executable's working directory
-gulp.task 'watch-assets', ->
+gulp.task 'watch', ['config'], ->
+  # watch config.project.watchGlob, {cwd:path.resolve(config.dirSource), ignoreInitial:false, awaitWriteFinish:true }
+  # .pipe print( (filepath)=> return 'Formatting source file: '+filepath; )
+  # .pipe format.format 'file'
+  # .pipe replace /^(\s+)(else)\s+(if)/m, '$1$2\n$1$3'
+  # .pipe gulp.dest path.resolve config.dirSource
   watch config.project.assetGlob, {cwd:path.resolve(config.dirAsset), ignoreInitial:false, awaitWriteFinish:true }
+  .pipe print( (filepath)=> return 'Asset copied: '+filepath; )
   .pipe gulp.dest( config.dirOutput )
-
-# watch mustache templates for changes
-gulp.task 'watch-mustache', ->
-  watchBindings = gulp.watch '*.mustache', {cwd:path.resolve(config.dirSource)}, ['mustache-source']
-  watchBindings.on 'change', (event) ->
-    console.log 'Mustache file ' + event.path + ' was ' + event.type + ', processing...'
-
-# watch source files and build on demand
-gulp.task 'watch-source', ->
-  watcher = gulp.watch config.watchGlob, {cwd:path.resolve(config.dirSource)}, [ 'build' ]
-  watcher.on 'change', (event) ->
-    console.log 'Source file ' + event.path + ' was ' + event.type + ', building...'
+  watch '**/*.cson', {cwd:path.resolve(config.dirAsset), ignoreInitial:false, awaitWriteFinish:true }
+  .pipe gulpcson()
+  .pipe print( (filepath)=> return 'CSON=>JSON: '+filepath; )
+  .pipe gulp.dest( config.dirOutput )
+  watch config.mustache.sourceGlob, {cwd:path.resolve(config.dirSource)}
+  .pipe mustache( config.mustache.context )
+  .pipe rename( config.mustache.rename )
+  .pipe print (filepath)=> return 'Mustaching: '+filepath;
+  .pipe gulp.dest( config.dirGeneratedSourceOutput )
 
 
+gulp.task 'mustache-source', ['config'], ->
+  # gulp.src config.mustache.sourceGlob, {cwd:path.resolve(config.dirSource)}
+  # .pipe mustache( config.mustache.context )
+  # .pipe rename( config.mustache.rename )
+  # .pipe print (filepath)=> return 'Mustaching: '+filepath;
+  # .pipe gulp.dest( config.dirGeneratedSourceOutput )
 
-gulp.task 'mustache-source', ['config'], (cb) ->
-  gulp.src( config.mustache.sourceGlob, {cwd:config.dirSource} )
-  .pipe( mustache( config.mustache.context ) )
-  .pipe( rename( config.mustache.rename ))
-  .pipe( gulp.dest( config.dirGeneratedSourceOutput ))
 
-
-gulp.task 'prebuild', ['mustache-source'], ->
+gulp.task 'prebuild', ['config','mustache-source'], ->
+  # copy assets over
+  gulp.src config.project.assetGlob, {cwd:path.resolve(config.dirAsset), ignoreInitial:false, awaitWriteFinish:true }
+  .pipe gulp.dest( config.dirOutput )
   # Prepare directory hierarchy
   fs.mkdir config.dirBuildRoot, 0o0775, (err)->
     # if err then console.error err
@@ -109,12 +108,14 @@ gulp.task 'build', ['prebuild'], (cb) ->
   exec "date", (err, stdout, stderr) ->
     if err then console.error err
 
-    # copy assets over
-    gulp.src config.project.assetGlob, {cwd:path.resolve(config.dirAsset), ignoreInitial:false, awaitWriteFinish:true }
-    .pipe gulp.dest( config.dirOutput )
-
     target = undefined
     sourceFiles = glob.sync path.resolve(config.dirSource,config.project.sourceGlob)
+    externalSourceFiles = glob.sync path.resolve(config.dirExternal,'src', config.project.externalSourceGlob)
+    # console.log 'EXTERNAL'
+    # console.log externalSourceFiles.join(' ')
+    sourceFiles.push externalSourceFiles.join(' ')
+    # console.log 'SOURCE'
+    # console.log sourceFiles.join(' ')
 
     switch config.platform
       when 'linux'
@@ -146,7 +147,7 @@ gulp.task 'build', ['prebuild'], (cb) ->
 
     # console.log target
     target = merge config.project, target
-    console.log target
+    # console.log target
 
     console.log 'Compiling for platform: ' + config.platform
     # TODO: incremental rebuilding
