@@ -22,7 +22,7 @@ target:
     LinkerArgs: [ '-lGL' ]
   darwin:{
     LinkerArgs: [ '-liconv' ]
-    Frameworks: [
+    frameworks: [
       '-framework CoreVideo'
       '-framework GLKit'
       '-framework OpenGL'

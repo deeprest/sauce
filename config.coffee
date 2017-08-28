@@ -4,27 +4,28 @@ path = require 'path'
 module.exports = ->
   # config expressions
   this.platform = os.platform()
-  this.dirRoot = path.resolve( process.cwd(), '..', '..')
-  this.dirSource = path.resolve( this.dirRoot, 'code')
-  this.dirGeneratedSourceOutput = path.resolve( this.dirSource, 'mustached')
-  this.dirExternal = path.resolve( this.dirRoot, 'external', this.platform )
-  this.dirBuildRoot = path.resolve( this.dirRoot, 'dev-build')
-  this.dirOutput = path.resolve( this.dirBuildRoot, this.platform)
-  this.dirObj = path.resolve( this.dirBuildRoot, '.obj')
-  this.dirTool = path.resolve( this.dirRoot, 'tool')
-  this.dirAsset = path.resolve( this.dirRoot, 'asset')
+  this.dirRoot = path.resolve process.cwd(), '..', '..'
+  this.dirSource = path.resolve this.dirRoot, 'code'
+  this.dirGeneratedSourceOutput = path.resolve this.dirSource, 'mustached'
+  this.dirDownload = path.resolve this.dirRoot, 'external'
+  this.dirExternal = path.resolve this.dirRoot, 'external', this.platform
+  this.dirBuildRoot = path.resolve this.dirRoot, 'dev-build'
+  this.dirOutput = path.resolve this.dirBuildRoot, this.platform
+  this.dirObj = path.resolve this.dirBuildRoot, '.obj'
+  this.dirTool = path.resolve this.dirRoot, 'tool'
+  this.dirAsset = path.resolve this.dirRoot, 'asset'
   this.includeDirectories = [
-    '-I' + path.resolve( this.dirExternal, 'include')
-    '-I' + path.resolve( this.dirSource )
-    '-I' + path.resolve( this.dirGeneratedSourceOutput )
-    '-I' + path.resolve( this.dirSource,'angelscript')
-    '-I' + path.resolve( this.dirSource,'component')
+    '-I' + path.resolve this.dirExternal, 'include'
+    '-I' + path.resolve this.dirSource
+    '-I' + path.resolve this.dirGeneratedSourceOutput
+    '-I' + path.resolve this.dirSource,'angelscript'
+    '-I' + path.resolve this.dirSource,'component'
     '-I/usr/local/include'
     '-I/usr/include'
   ]
   this.linkerDirectories = [
-    '-L' + path.resolve( this.dirExternal )
-    '-L' + path.resolve( this.dirExternal, 'lib' )
+    '-L' + path.resolve this.dirExternal
+    '-L' + path.resolve this.dirExternal, 'lib'
     '-L/usr/local/lib'
     '-L/usr/lib'
   ]
@@ -35,7 +36,7 @@ module.exports = ->
     rename: { extname: ''}
     context: { Components: [] }
   }
-  # project config is merged with target
+
   this.project = {
     outputExecutableName: 'default'
     compilerDefines: [
@@ -45,20 +46,22 @@ module.exports = ->
       # '-DCONFIG_DEBUG'
       # '-DGL_GLEXT_PROTOTYPES'
     ]
-    LinkerArgs: [
+    external: []
+    linkerArgs: [
       # '-lstdc++'
       # '-lm'
       # '-lpthread'
     ]
     sourceGlob: '**/*.cpp'
-    externalSourceGlob: '**/*.cpp'
     watchGlob: '{**/*.cpp,**/*.h,**/*.mustache}'
     assetGlob: '**/*@(.png|.ogg|.json|.as|.frag|.vert)'
   }
+
+  # anything in the active target.[platform] object is merged into this.project
   this.target = {
     linux: {
       compilerDefines: []
-      LinkerArgs: [
+      linkerArgs: [
           # '-lstdc++'
           # '-lm'
           # '-lpthread'
@@ -72,7 +75,7 @@ module.exports = ->
     }
     darwin:{
       compilerDefines: []
-      LinkerArgs:[
+      linkerArgs:[
         # '-lstdc++'
         # '-lm'
         # '-liconv'
@@ -83,7 +86,7 @@ module.exports = ->
         # '-langelscript'
         # '-lphysfs'
       ]
-      Frameworks:[
+      frameworks:[
         # '-framework CoreVideo'
         # '-framework GLKit'
         # '-framework OpenGL'

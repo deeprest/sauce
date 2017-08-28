@@ -1,27 +1,23 @@
 # Sauce
-Node.js build tool for simple C++ projects
+indie game development tool for C++ projects
 
 ## Features
-* Clang++ for compiler frontend
-* CSON project config files
-* Uses Gulp.js for build tasks (will use new version of Gulp when it's out)
-
-### Extra Features
-* the node module 'libclang' can be used to generate script bindings)
-* self-compiling. Watches for changes to the build script (itself), recompiles the coffee source, and runs everything else in a separate process
-* auto-builds. Watches for changes to source/header files and builds the executable on-demand (full rebuild for now)
-* runs template task; for custom preprocessing of source. (Mustache templates)
-* generates AngelScript bindings from C++ headers
-* copies assets for a packaged build. (TODO) packages build
+* [Gulp](https://gulpjs.com/) for task management
+* [AngelScript](http://www.angelcode.com/angelscript/) bindings can be generated from source
+* [Mustache](https://mustache.github.io/) templates are processed
+* Processes and copies assets into the build directory on modification
+* Builds can be triggered by source changes
+* Builds project using [Clang](http://clang.llvm.org/ "but there's no reason it couldn't use another compiler" )
+* Project configured from a .cson file (needs work)
+* Downloads and builds project libraries from repo or archive
 
 ## Todo
-+ (done) load project/build config from CSON
-- tiny example project
-- incremental builds. compile object files on demand and incremental linking.
-- package a build
-- (replace existing bash script) get libraries: define libraries in project config, clone repo or download release archives and build
-- more impressive example project
-- ability to generate CMakeLists.txt?
+* Incremental builds (gulp-changed)
+* Generate installer packages using mojosetup
+* Re-test AngelScript binding generator
+* example project
+* generate CMakeLists.txt?
+* cleanup: remove unnecessary node modules
 
 ### Required to generate AngelScript bindings
 - Linux: libclang package must be installed, and the library must be in your path

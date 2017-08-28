@@ -1,3 +1,7 @@
+
+# TODO: get the config object without creating a new one here
+# TODO: redesign the binding generator
+
 config = new (require './config.js')()
 require 'shelljs/global'
 os = require 'os'
@@ -234,69 +238,3 @@ module.exports = ->
   gulp.task 'bindings', ->
     gulp.start 'binding-source'
     gulp.start 'binding-header'
-
-
-
-  ###
-  #gulp.start 'copyAssets'
-  #gulp.start 'bindings-glew', (err) ->
-    #if err!=undefined
-    #  console.log 'ERROR:', err
-    #gulp.start 'constants-glew', () ->
-    #  console.log 'constants-glew is done!'
-      #if err!=undefined
-      #  console.log 'ERROR:', err
-      #RenderMustacheTemplate 'Binding.h.mustache', 'Binding.h', MustacheContext, ->
-      #  RenderMustacheTemplate 'Binding.cpp.mustache', 'Binding.cpp', MustacheContext, ->
-  #cb()
-
-  params.includeCursorRegex = /SDL_/
-  params.excludeCursorRegex = /@|_SDL|dummy|alloc|SDL_[a-z]|SDL_SysWMmsg|SDL_Cursor|SDL_Window|SDL_BlitMap/
-  params.sourceFile = path.resolve(config.dirLibrary, platform, 'include','SDL2','SDL_events.h')
-  params.includes = [
-    'SDL_stdinc.h'
-    'SDL_events.h'
-    'SDL_joystick.h'
-    'SDL_gamecontroller.h'
-    'SDL_mouse.h'
-  ]
-  #GenerateAngelScriptBindings( params )
-  ###
-  #gulp.src event.path
-  #.pipe format.format()
-  #  .pipe gulp.dest('test-format')
-
-
-  ###
-  gulp.task 'getlibs', ->
-    #GetLib lib for lib in ExternalLibraries
-    ExternalLibraries = [
-      sdl =
-        url:'https://www.libsdl.org/tmp/SDL-2.0.4-10002.tar.gz',
-        downloadTo:'sdl.tar.gz',
-        buildCommand:'cd '+path.resolve(config.dirLibrary,'SDL-2.0.4-10002')+'; sudo ./configure; sudo make;'
-        #includeDir:'-I' + path.resolve(config.dirLibrary, 'SDL-2.0.4-10002','include')
-      ,
-      angelscript =
-        url:'http://www.angelcode.com/angelscript/sdk/files/angelscript_2.30.2.zip',
-        downloadTo:'angelscript.zip',
-        buildCommand:'cd '+path.resolve(config.dirLibrary,'sdk','angelscript','projects','gnuc macosx')+'; make;',
-        includeDir: [
-          '-I' + path.resolve(config.dirLibrary, 'sdk', 'angelscript','include')
-          '-I' + path.resolve(config.dirLibrary, 'sdk', 'add_on', 'scriptbuilder','include')
-          '-I' + path.resolve(config.dirLibrary, 'sdk', 'add_on', 'scriptstdstring','include')
-        ]
-      ,
-      ,
-      box2d =
-        url: 'https://codeload.github.com/erincatto/Box2D/tar.gz/v2.3.1',
-        downloadTo:'box2d.tar.gz',
-        buildCommand:'cd '+path.resolve(config.dirLibrary, 'Box2D-2.3.1','Box2D','Build')+'; cmake -DBOX2D_INSTALL=ON -DBOX2D_BUILD_SHARED=ON ..; make'
-    ]
-    #RunCommand config.dirLibrary, 'curl http://www.angelcode.com/angelscript/sdk/files/angelscript_2.30.2.zip > angelscript.zip; unzip angelscript.zip -d angelscript'
-    for lib in ExternalLibraries
-      child_process.exec 'curl '+obj.url+' > '+obj.downloadTo+'; tar -xf '+obj.downloadTo+'; '+obj.buildCommand+';', { cwd: config.dirLibrary }, (err, stdout, stderr) ->
-      #sudo ./configure; make;', { cwd: config.dirLibrary }, (err, stdout, stderr) ->
-        console.log stdout.toString()
-        console.log stderr.toString()
-  ###
