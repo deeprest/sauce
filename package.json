@@ -1,40 +1,46 @@
 {
   "name": "sauce",
-  "version": "0.2.0",
+  "version": "0.3.0",
+  "engines": {
+    "node": ">= 6.9.4"
+  },
+  "description": "indie game development tool for C++ projects",
+  "license": "MIT",
   "dependencies": {
     "cson": "^4.1.0",
     "deepmerge": "^1.5.1",
-    "ffi": "2.1.0",
-    "glob": "^7.0.5",
-    "gulp": "3.9.1",
-    "gulp-clang-format": "^1.0.23",
+    "gulp": "git+https:gulpjs@github.com/gulpjs/gulp.git#4.0",
+    "gulp-cached": "^1.1.1",
+    "gulp-changed": "^3.1.0",
     "gulp-coffee": "^2.3.2",
     "gulp-cson": "^0.4.0",
     "gulp-mustache": "^2.2.0",
+    "gulp-newer": "^1.3.0",
     "gulp-print": "^2.0.1",
+    "gulp-remember": "^0.3.1",
     "gulp-rename": "^1.2.2",
-    "gulp-replace": "^0.5.4",
-    "gulp-watch": "^4.3.11",
+    "gulp-repl": "^2.0.3",
+    "gulp-run": "^1.7.1",
+    "yargs": "^8.0.2"
+  },
+  "other": {
+    "ffi": "2.1.0",
+    "gulp-git": "^2.4.2",
+    "hg": "^0.2.0",
     "libclang": "^0.0.11",
     "ref": "^1.3.2",
     "shelljs": "^0.7.3",
-    "streamqueue": "^1.1.1",
-    "yargs": "^8.0.2"
+    "streamqueue": "^1.1.1"
   },
-  "devDependencies": {
-    "gulp": "^3.9.1"
-  },
-  "engine": "6.9.4",
   "scripts": {
     "postinstall": "ln -s ./node_modules/.bin/gulp sauce; npm run build",
-    "build": "coffee --compile gulpfile.coffee; coffee --compile --output js/ src/"
+    "build": "coffee --compile *.coffee"
   },
   "keywords": [
-    "c++",
-    "build",
-    "tool",
-    "gulp",
+    "gamedev",
     "game",
-    "gamedev"
+    "c++",
+    "tool",
+    "gulp"
   ]
 }
