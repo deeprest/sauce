@@ -107,12 +107,18 @@ CompileAll = (done)->
   for f in sourceFiles
     command = 'clang++ -g -c -o '+ path.resolve( config.dirObj, path.basename(f,'.cpp')+'.o')+' '+f+' '+comp.join(' ')
     exec command, (err, stdout, stderr) ->
-      if err then console.error err; return
-      console.log stdout
+      # console.log stdout
+      # if stdout.indexOf 'Error' !== -1
+      #   count = 0
+      #   return
+      if stderr.length >0 
+        console.log stderr
+        return
+      # if err then console.error err; return
       count--;
-      console.log parseInt( 100*(1-count/total) ).toString()+'%'
       if count == 0
         done()
+      console.log parseInt( 100*(1-count/total) ).toString()+'%'
 
 # TODO
 CompileIncremental = (done)->
