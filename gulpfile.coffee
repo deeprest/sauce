@@ -19,7 +19,7 @@ remember = require 'gulp-remember'
 # apt = require 'apt'
 yargs = require('yargs').argv
 cson = require 'cson'
-glob = require 'glob'  # TODO: remove
+glob = require 'glob'
 merge = require 'deepmerge'
 
 stream = require 'stream' # TEMP
@@ -94,31 +94,39 @@ watcher = (done)->
   gulp.watch config.project.assetGlob, Mustache
 
 CompileAll = (done)->
-  if fs.existsSync config.dirObj == false
-    fs.mkdirSync config.dirObj
-  sourceFiles = glob.sync path.resolve(config.dirSource,config.project.sourceGlob)
-  externalSourceFiles = glob.sync path.resolve(config.dirExternal,'src', config.project.sourceGlob)
-  sourceFiles.push externalSourceFiles.join(' ')
-  comp = [] #['-g','-x c++','-std=c++11']
-  comp.push config.project.compilerDefines.join(' ')
-  comp.push config.includeDirectories.join(' ')
-  total = sourceFiles.length
-  count = total
-  for f in sourceFiles
-    command = 'clang++ -g -c -o '+ path.resolve( config.dirObj, path.basename(f,'.cpp')+'.o')+' '+f+' '+comp.join(' ')
-    exec command, (err, stdout, stderr) ->
-      # console.log stdout
-      # if stdout.indexOf 'Error' !== -1
-      #   count = 0
-      #   return
-      if stderr.length >0 
-        console.log stderr
-        return
-      # if err then console.error err; return
-      count--;
-      if count == 0
-        done()
-      console.log parseInt( 100*(1-count/total) ).toString()+'%'
+  return new Promise (resolve, reject)->
+    if fs.existsSync config.dirObj == false
+      fs.mkdirSync config.dirObj
+    sourceFiles = glob.sync path.resolve(config.dirSource,config.project.sourceGlob)
+    externalSourceFiles = glob.sync path.resolve(config.dirExternal,'src', config.project.sourceGlob)
+    sourceFiles.push externalSourceFiles.join(' ')
+    comp = [] #['-g','-x c++','-std=c++11']
+    comp.push config.project.compilerDefines.join(' ')
+    comp.push config.includeDirectories.join(' ')
+    total = sourceFiles.length
+    count = total
+    for f in sourceFiles
+      command = 'clang++ -g -c -o '+ path.resolve( config.dirObj, path.basename(f,'.cpp')+'.o')+' '+f+' '+comp.join(' ')
+      exec command, (err, stdout, stderr) ->
+        if count <= 0 then return
+        if stdout.length > 0
+          console.log 'STDOUT '+stdout
+          if stdout.indexOf('error:') >= 0
+            count = 0
+            reject( new Error('stdout') )
+            return
+        if stderr.length > 0
+          console.log 'STDERROR '+stderr
+          if stderr.indexOf('error:')>=0
+            count = 0
+            reject( new Error('stderr') )
+            return
+        count--;
+        if count <= 0
+          resolve()
+          return
+          # done()
+        console.log parseInt( 100*(1-count/total) ).toString()+'%'
 
 # TODO
 CompileIncremental = (done)->
@@ -168,11 +176,10 @@ Launch = (done)->
 
 Prebuild = gulp.parallel Mustache, CSON, Assets
 Rebuild = gulp.series Clean, Prebuild, CompileAll #, Link
-
 gulp.task 'config', Configure
 gulp.task 'watch', watcher
 gulp.task 'rebuild', Rebuild
 gulp.task 'link', Link
-gulp.task 'build', gulp.series CompileAll, Link
-gulp.task 'launch', Launch
+gulp.task 'build', gulp.series Prebuild, CompileAll, Link
+gulp.task 'launch', gulp.series gulp.parallel(CSON, Assets), Launch
 gulp.task 'default', gulp.series Configure, Start
