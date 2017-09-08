@@ -24,8 +24,9 @@ merge = require 'deepmerge'
 
 stream = require 'stream' # TEMP
 
-config = new (require './config.js')()
-#(require './binding.js')()
+config = (require './config.js')()
+external = require './external.js'
+# external.config = config
 
 Start = (done)->
   gulp.repl = repl.start gulp
@@ -43,7 +44,7 @@ Configure = (done)->
     obj = cson.parse buffer
     config = merge config, obj
     target = undefined
-    switch config.platform
+    switch config.targetPlatform
       when 'linux'
         target = config.target.linux
         break
@@ -54,14 +55,13 @@ Configure = (done)->
         console.log "platform "+ config,platform +"not supported by build script!"
     config.project = merge config.project, target
     # console.log config
-    console.log 'Configured for platform: ' + config.platform
+    console.log 'Configured for platform: ' + config.targetPlatform
     done()
-
 
 Clean = (done)->
   # fs.rmdir config.dirObj
   fs.unlink path.resolve(config.dirOutput, config.project.outputExecutableName), ->{}
-  if config.platform=='darwin'
+  if config.targetPlatform=='darwin'
     fs.stat path.resolve(config.dirOutput, config.project.outputExecutableName+'.dSYM'), (err,stats)->
       fs.unlink path.resolve(config.dirOutput, config.project.outputExecutableName+'.dSYM'), (err)->
         done()
@@ -95,7 +95,7 @@ watcher = (done)->
 
 CompileAll = (done)->
   return new Promise (resolve, reject)->
-    if fs.existsSync config.dirObj == false
+    if fs.existsSync(config.dirObj) == false
       fs.mkdirSync config.dirObj
     sourceFiles = glob.sync path.resolve(config.dirSource,config.project.sourceGlob)
     externalSourceFiles = glob.sync path.resolve(config.dirExternal,'src', config.project.sourceGlob)
@@ -128,7 +128,6 @@ CompileAll = (done)->
           # done()
         console.log parseInt( 100*(1-count/total) ).toString()+'%'
 
-# TODO
 CompileIncremental = (done)->
   comp = [] #['-g','-x c++','-std=c++11']
   comp.push config.project.compilerDefines.join(' ')
@@ -153,7 +152,7 @@ Link = (done)->
   linkerArgs = config.project.linkerArgs
   linkerArgs.push config.linkerDirectories
   link.push '-Wl,' + linkerArgs.join(',')
-  if config.platform == 'darwin'
+  if config.targetPlatform == 'darwin'
     link.push frameworks.join(' ')
   objectFiles = glob.sync config.dirObj+'/**/*.o'
   linkCommand = ['clang++ -g', objectFiles.join(' '), link.join(' '),  '-o', path.resolve( config.dirOutput, config.project.outputExecutableName) ].join(' ')
@@ -162,11 +161,10 @@ Link = (done)->
     console.log stdout
     console.log stderr
     if err then console.error 'LINK ERROR: '+err
-    else if config.platform == 'darwin'
+    else if config.targetPlatform == 'darwin'
       exec 'dsymutil -o '+path.resolve(config.dirOutput, config.project.outputExecutableName)+'.dSYM '+path.resolve(config.dirOutput, config.project.outputExecutableName), (err, stdout, stderr) ->
         if err then console.error err
     done()
-
 
 Launch = (done)->
   app = spawn path.resolve(config.dirOutput, config.project.outputExecutableName), [], {stdio:'inherit'}
@@ -175,11 +173,12 @@ Launch = (done)->
     done()
 
 Prebuild = gulp.parallel Mustache, CSON, Assets
-Rebuild = gulp.series Clean, Prebuild, CompileAll #, Link
+Build = gulp.series Prebuild, CompileAll, Link
 gulp.task 'config', Configure
 gulp.task 'watch', watcher
-gulp.task 'rebuild', Rebuild
+gulp.task 'rebuild', gulp.series Clean, Build
 gulp.task 'link', Link
-gulp.task 'build', gulp.series Prebuild, CompileAll, Link
+gulp.task 'build', Build
 gulp.task 'launch', gulp.series gulp.parallel(CSON, Assets), Launch
+gulp.task 'test', external.Test
 gulp.task 'default', gulp.series Configure, Start

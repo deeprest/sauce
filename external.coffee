@@ -1,8 +1,59 @@
+fs = require 'fs'
+path = require 'path'
+request = require 'request'
+tar = require 'tar'
 
+config = (require './config')()
 
+Download = (url,filepath)->
+  return new Promise (resolve, reject)->
+    request.get url
+    .on 'response', (rsp)->  console.log( rsp.statusCode ); console.log(rsp.headers['content-type'])
+    .on 'error', (err)->  console.log 'ERROR: '+err; reject()
+    .pipe fs.createWriteStream path.resolve( config.dirDownload, filepath )
+      .on 'finish', ()-> resolve()
+      .on 'error', (err)->  console.log 'ERROR: '+err; reject()
 
+exports.Test = (done)->
+  return (Download 'https://codeload.github.com/erincatto/Box2D/tar.gz/v2.3.1', 'box2d.tar.gz')
+    .then tar.extract( {file:path.resolve( config.dirDownload, 'box2d.tar.gz' )} )
 
 ###
+    pushd $EXTERNAL
+      curl $CURL_OPTIONS https://codeload.github.com/erincatto/Box2D/tar.gz/v2.3.1 > box2d.tar.gz
+      tar -xf box2d.tar.gz
+
+      if [[ "$SYSTEM" == "linux" ]]; then
+        pushd Box2D-2.3.1/Box2D
+          ../../../tool/$SYSTEM/premake5 gmake
+          cd Build/gmake
+          make config="debug" Box2D
+          make
+        popd
+        cp Box2D-2.3.1/Box2D/Build/gmake/bin/Debug/libBox2D.a $SYSTEM
+
+      elif [[ "$SYSTEM" == "darwin" ]]; then
+        pushd Box2D-2.3.1/Box2D
+          ../../../$TOOL/$SYSTEM/premake5 gmake
+          cd Build/gmake
+          make config="debug" Box2D
+          make
+        popd
+        cp Box2D-2.3.1/Box2D/Build/gmake/bin/Debug/libBox2D.a $SYSTEM
+
+      elif [[ "$SYSTEM" == "windows" ]]; then
+        # Using cmake here because premake5 seems to ENFORCE using VS on windows
+        # The following link indicates support for mingw in preamake5 in version 5.0.0-alpha5
+        # https://github.com/premake/premake-core/commit/d536aa67e7f97767bb95b570205e44d5a7df85ba
+        pushd Box2D-2.3.1/Box2D/Build
+        cmake -G "MSYS Makefiles" -DBOX2D_INSTALL=OFF -DBOX2D_BUILD_SHARED=OFF -DBOX2D_BUILD_EXAMPLES=OFF ..
+        make config="debug" Box2D
+        cp Box2D/libBox2D.a ../../../$SYSTEM
+        popd
+      fi
+    popd
+###
+
 
 # AptInstall = (libs,cb) =>
 #   emitter = apt.install libs.join(' '), ()->
@@ -15,23 +66,27 @@
 #     if err then console.error err
 
 
-gulp.task 'setup', ['config'], ->
-  for ekey,evalue of config.project.external
-    switch evalue
-      when 'sdl'
-        # AptInstall ['libsdl2-dev']
-        break
-      when 'sdl-build'
-        SDL_ARCHIVE='SDL-2.0.4-10002'
-        emitter = exec 'curl https://www.libsdl.org/tmp/'+SDL_ARCHIVE+'.tar.gz > '+SDL_ARCHIVE+'.tar.gz', { cwd: config.dirDownload }, (err, stdout, stderr) =>
-          if err then console.error err
-        emitter.on 'stdout', (data)->
-          if data? then console.log data
-        emitter.on 'stderr', (err)->
-          if err then console.error err
-          # exec 'tar -xf '+SDL_ARCHIVE+'.tar.gz', { cwd: config.dirDownload }, (err, stdout, stderr) =>
-          #   if err then console.error err
-        #TODO: build SDL from source
+exports.Setup = (done)->
+  return new Promise (resolve, reject)->
+    for ekey,evalue of config.project.external
+      switch evalue
+        when 'box2d'
+
+          break
+        when 'sdl'
+          # AptInstall ['libsdl2-dev']
+          break
+        when 'sdl-build'
+          SDL_ARCHIVE='SDL-2.0.4-10002'
+          emitter = exec 'curl https://www.libsdl.org/tmp/'+SDL_ARCHIVE+'.tar.gz > '+SDL_ARCHIVE+'.tar.gz', { cwd: config.dirDownload }, (err, stdout, stderr) =>
+            if err then console.error err
+          emitter.on 'stdout', (data)->
+            if data? then console.log data
+          emitter.on 'stderr', (err)->
+            if err then console.error err
+            # exec 'tar -xf '+SDL_ARCHIVE+'.tar.gz', { cwd: config.dirDownload }, (err, stdout, stderr) =>
+            #   if err then console.error err
+          #TODO: build SDL from source
 
         # rm $SYSTEM/libSDL*
         # pushd $SDL_ARCHIVE
@@ -53,12 +108,10 @@ gulp.task 'setup', ['config'], ->
         #   #cp ../include/* ../../$SYSTEM/include
         # popd
 
-        break
-      when 'angelscript'
-        break
-      else
-        console.log 'Unknown external '+evalue
-
+          break
+        else
+          console.log 'Unknown external '+evalue
+###
   modules =
     sdl:
       url:'https://www.libsdl.org/tmp/SDL-2.0.4-10002.tar.gz'

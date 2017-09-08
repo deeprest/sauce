@@ -1,16 +1,16 @@
 os = require 'os'
 path = require 'path'
 
-module.exports = ->
-  # config expressions
-  this.platform = os.platform()
+module.exports = ()->
+  this.devPlatform = os.platform()
+  this.targetPlatform = this.devPlatform
   this.dirRoot = path.resolve process.cwd(), '..', '..'
   this.dirSource = path.resolve this.dirRoot, 'code'
   this.dirGeneratedSourceOutput = path.resolve this.dirSource, 'mustached'
   this.dirDownload = path.resolve this.dirRoot, 'external'
-  this.dirExternal = path.resolve this.dirRoot, 'external', this.platform
+  this.dirExternal = path.resolve this.dirRoot, 'external', this.targetPlatform
   this.dirBuildRoot = path.resolve this.dirRoot, 'dev-build'
-  this.dirOutput = path.resolve this.dirBuildRoot, this.platform
+  this.dirOutput = path.resolve this.dirBuildRoot, this.targetPlatform
   this.dirObj = path.resolve this.dirBuildRoot, '.obj'
   this.dirTool = path.resolve this.dirRoot, 'tool'
   this.dirAsset = path.resolve this.dirRoot, 'asset'
