@@ -60,6 +60,7 @@ module.exports = ()->
   # anything in the active target.[platform] object is merged into this.project
   this.target = {
     linux: {
+      external: []
       compilerDefines: []
       linkerArgs: [
           # '-lstdc++'
@@ -74,6 +75,7 @@ module.exports = ()->
       ]
     }
     darwin:{
+      external: []
       compilerDefines: []
       linkerArgs:[
         # '-lstdc++'

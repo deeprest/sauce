@@ -21,12 +21,16 @@ yargs = require('yargs').argv
 cson = require 'cson'
 glob = require 'glob'
 merge = require 'deepmerge'
+request = require 'request'
+tar = require 'tar'
 
 stream = require 'stream' # TEMP
 
 config = (require './config.js')()
 external = require './external.js'
+util = require './util.js'
 # external.config = config
+
 
 Start = (done)->
   gulp.repl = repl.start gulp
@@ -54,12 +58,118 @@ Configure = (done)->
       else
         console.log "platform "+ config,platform +"not supported by build script!"
     config.project = merge config.project, target
-    # console.log config
+    # add lowercase names to mustahce component list
+    for component in config.mustache.context.Components
+      component['lowerName'] = component.type.toLowerCase()
+    console.log config
     console.log 'Configured for platform: ' + config.targetPlatform
     done()
 
+
+Download = (url,filepath)->
+  return new Promise (resolve, reject)->
+    console.log 'Downloading '+url
+    request.get url
+    .on 'response', (rsp)->
+      if rsp.statusCode == 404
+        reject('Bad URL:'+url)
+    .on 'error', (err)->
+      reject('Error connecting to url: '+err)
+    .pipe fs.createWriteStream path.resolve( config.dirDownload, filepath )
+      .on 'finish', ()->
+        console.log 'Finished downloading to '+filepath
+        resolve()
+      .on 'error', (err)->
+        reject('Error writing file: '+err)
+
+box2d = ()->
+  # return Download('https://codeload.github.com/erincatto/Box2D/tar.gz/v2.3.1','box2d.tar.gz')
+  return (new Promise (resolve,reject) -> resolve())
+  .then ()-> return tar.extract {file:path.resolve(config.dirDownload,'box2d.tar.gz'),cwd:config.dirDownload }, (err, stdout, stderr) -> console.log 'tar extract done'
+  .then ()-> return new Promise (resolve,reject) ->
+    exec 'cmake -G "Unix Makefiles" -DBOX2D_INSTALL=OFF -DBOX2D_BUILD_SHARED=OFF -DBOX2D_BUILD_EXAMPLES=OFF ..', {cwd:path.resolve(config.dirDownload,'Box2D-2.3.1','Box2D','Build')}, (err, stdout, stderr) ->
+      if err then reject( 'cmake failed: '+err ); return
+      exec 'cp -r Box2D '+path.resolve(config.dirExternal,'include'), {cwd:path.resolve(config.dirDownload,'Box2D-2.3.1','Box2D')}, (err, stdout, stderr) ->
+        if err then reject( 'cp failed: '+err ); return
+        exec 'make config="debug"', {cwd:path.resolve(config.dirDownload,'Box2D-2.3.1','Box2D','Build')}, (err, stdout, stderr) ->
+          if err then reject( 'make config failed: '+err ); return
+          exec 'cp libBox2D.a '+path.resolve(config.dirExternal,'lib'), {cwd:path.resolve(config.dirDownload,'Box2D-2.3.1','Box2D','Build','Box2D')}, (err, stdout, stderr) ->
+            if err then reject( 'cp failed: '+err ); return
+            resolve()
+            # TODO: clean up?
+  .catch (reason)-> console.error reason
+
+sdl = ()->
+  return new Promise (resolve,reject) ->
+    resolve()
+
+sdl_build = ()->
+  return new Promise (resolve,reject) ->
+    resolve()
+    SDL_ARCHIVE='SDL-2.0.4-10002'
+    emitter = exec 'curl https://www.libsdl.org/tmp/'+SDL_ARCHIVE+'.tar.gz > '+SDL_ARCHIVE+'.tar.gz', { cwd: config.dirDownload }, (err, stdout, stderr) =>
+      if err then console.error err
+    emitter.on 'stdout', (data)->
+      if data? then console.log data
+    emitter.on 'stderr', (err)->
+      if err then console.error err
+      # exec 'tar -xf '+SDL_ARCHIVE+'.tar.gz', { cwd: config.dirDownload }, (err, stdout, stderr) =>
+      #   if err then console.error err
+    #TODO: build SDL from source
+    # rm $SYSTEM/libSDL*
+    # pushd $SDL_ARCHIVE
+    #   mkdir build-$SYSTEM
+    #   cd build-$SYSTEM
+    #   if [[ "$SYSTEM" == "darwin" ]]; then
+    #     CC=$(pwd)/../build-scripts/gcc-fat.sh ../configure
+    #     make clean
+    #     make
+    #   else
+    #     ../configure --prefix=$DIR_LIB
+    #     make clean
+    #     make
+    #     make install
+    #   fi
+    #   ##cp build/lib* ../../$SYSTEM
+    #   #cp build/.libs/libSDL2.a ../../$SYSTEM
+    #   #cp include/* ../../$SYSTEM/include
+    #   #cp ../include/* ../../$SYSTEM/include
+    # popd
+
+glm = ()->
+  return new Promise (resolve,reject) ->
+    resolve()
+json = ()->
+  return new Promise (resolve,reject) ->
+    resolve()
+mojosetup = ()->
+  return new Promise (resolve,reject) ->
+    resolve()
+angelscript = ()->
+  return new Promise (resolve,reject) ->
+    resolve()
+
+Setup = ()->
+  ray = []
+  return new Promise (resolve, reject)->
+    for ekey,evalue of config.project.external
+      console.log evalue
+      switch evalue
+        when 'sdl' then ray.push sdl; break
+        when 'sdl-build' then ray.push sdl_build; break
+        when 'box2d' then ray.push box2d; break
+        when 'glm' then ray.push glm; break
+        when 'json' then ray.push json; break
+        when 'angelscript' then break
+        when 'mojosetup' then break
+        else console.log 'Unknown external '+evalue
+    console.log 'done processing ext'
+    resolve()
+  .then gulp.series ray
+
 Clean = (done)->
-  # fs.rmdir config.dirObj
+  if fs.existsSync config.dirObj
+    util.rmDirSync config.dirObj
   fs.unlink path.resolve(config.dirOutput, config.project.outputExecutableName), ->{}
   if config.targetPlatform=='darwin'
     fs.stat path.resolve(config.dirOutput, config.project.outputExecutableName+'.dSYM'), (err,stats)->
@@ -153,7 +263,7 @@ Link = (done)->
   linkerArgs.push config.linkerDirectories
   link.push '-Wl,' + linkerArgs.join(',')
   if config.targetPlatform == 'darwin'
-    link.push frameworks.join(' ')
+    link.push config.project.frameworks.join(' ')
   objectFiles = glob.sync config.dirObj+'/**/*.o'
   linkCommand = ['clang++ -g', objectFiles.join(' '), link.join(' '),  '-o', path.resolve( config.dirOutput, config.project.outputExecutableName) ].join(' ')
   # console.log linkCommand
@@ -174,11 +284,13 @@ Launch = (done)->
 
 Prebuild = gulp.parallel Mustache, CSON, Assets
 Build = gulp.series Prebuild, CompileAll, Link
+
+gulp.task 'default', gulp.series Configure, Start
 gulp.task 'config', Configure
+gulp.task 'setup', Setup
 gulp.task 'watch', watcher
+gulp.task 'clean', Clean
 gulp.task 'rebuild', gulp.series Clean, Build
 gulp.task 'link', Link
 gulp.task 'build', Build
 gulp.task 'launch', gulp.series gulp.parallel(CSON, Assets), Launch
-gulp.task 'test', external.Test
-gulp.task 'default', gulp.series Configure, Start

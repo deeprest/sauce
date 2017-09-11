@@ -1,22 +1,46 @@
 fs = require 'fs'
 path = require 'path'
-request = require 'request'
-tar = require 'tar'
+# request = require 'request'
+# tar = require 'tar'
+# exec = (require 'child_process').exec
+# config = (require './config')()
 
-config = (require './config')()
+#
+# Download = (url,filepath)->
+#   return new Promise (resolve, reject)->
+#     console.log 'Downloading '+url
+#     request.get url
+#     .on 'response', (rsp)->
+#       if rsp.statusCode == 404
+#         reject('Bad URL:'+url)
+#     .on 'error', (err)->
+#       reject('Error connecting to url: '+err)
+#     .pipe fs.createWriteStream path.resolve( config.dirDownload, filepath )
+#       .on 'finish', ()->
+#         console.log 'Finished downloading to '+filepath
+#         resolve()
+#       .on 'error', (err)->
+#         reject('Error writing file: '+err)
+#
+# exports.Box2D = ()->
+# # return Download('https://codeload.github.com/erincatto/Box2D/tar.gz/v2.3.1','box2d.tar.gz')
+# return new Promise (resolve,reject) -> resolve()
+# .then ()-> return tar.extract {file:path.resolve(config.dirDownload,'box2d.tar.gz'),cwd:config.dirDownload }, (err, stdout, stderr) -> console.log 'tar extract done'
+# .then ()-> return new Promise (resolve,reject) ->
+#   exec 'cmake -G "Unix Makefiles" -DBOX2D_INSTALL=OFF -DBOX2D_BUILD_SHARED=OFF -DBOX2D_BUILD_EXAMPLES=OFF ..', {cwd:path.resolve(config.dirDownload,'Box2D-2.3.1','Box2D','Build')}, (err, stdout, stderr) ->
+#     if err then reject( 'cmake failed: '+err ); return
+#     exec 'cp -r Box2D '+path.resolve(config.dirExternal,'include'), {cwd:path.resolve(config.dirDownload,'Box2D-2.3.1','Box2D')}, (err, stdout, stderr) ->
+#       if err then reject( 'cp failed: '+err ); return
+#       exec 'make config="debug"', {cwd:path.resolve(config.dirDownload,'Box2D-2.3.1','Box2D','Build')}, (err, stdout, stderr) ->
+#         if err then reject( 'make config failed: '+err ); return
+#         exec 'cp libBox2D.a '+path.resolve(config.dirExternal,'lib'), {cwd:path.resolve(config.dirDownload,'Box2D-2.3.1','Box2D','Build','Box2D')}, (err, stdout, stderr) ->
+#           if err then reject( 'cp failed: '+err ); return
+#           resolve()
+#           # TODO: clean up?
+#   # return
+# # .catch (reason)-> console.error reason
 
-Download = (url,filepath)->
-  return new Promise (resolve, reject)->
-    request.get url
-    .on 'response', (rsp)->  console.log( rsp.statusCode ); console.log(rsp.headers['content-type'])
-    .on 'error', (err)->  console.log 'ERROR: '+err; reject()
-    .pipe fs.createWriteStream path.resolve( config.dirDownload, filepath )
-      .on 'finish', ()-> resolve()
-      .on 'error', (err)->  console.log 'ERROR: '+err; reject()
 
-exports.Test = (done)->
-  return (Download 'https://codeload.github.com/erincatto/Box2D/tar.gz/v2.3.1', 'box2d.tar.gz')
-    .then tar.extract( {file:path.resolve( config.dirDownload, 'box2d.tar.gz' )} )
 
 ###
     pushd $EXTERNAL
@@ -66,51 +90,7 @@ exports.Test = (done)->
 #     if err then console.error err
 
 
-exports.Setup = (done)->
-  return new Promise (resolve, reject)->
-    for ekey,evalue of config.project.external
-      switch evalue
-        when 'box2d'
 
-          break
-        when 'sdl'
-          # AptInstall ['libsdl2-dev']
-          break
-        when 'sdl-build'
-          SDL_ARCHIVE='SDL-2.0.4-10002'
-          emitter = exec 'curl https://www.libsdl.org/tmp/'+SDL_ARCHIVE+'.tar.gz > '+SDL_ARCHIVE+'.tar.gz', { cwd: config.dirDownload }, (err, stdout, stderr) =>
-            if err then console.error err
-          emitter.on 'stdout', (data)->
-            if data? then console.log data
-          emitter.on 'stderr', (err)->
-            if err then console.error err
-            # exec 'tar -xf '+SDL_ARCHIVE+'.tar.gz', { cwd: config.dirDownload }, (err, stdout, stderr) =>
-            #   if err then console.error err
-          #TODO: build SDL from source
-
-        # rm $SYSTEM/libSDL*
-        # pushd $SDL_ARCHIVE
-        #   mkdir build-$SYSTEM
-        #   cd build-$SYSTEM
-        #   if [[ "$SYSTEM" == "darwin" ]]; then
-        #     CC=$(pwd)/../build-scripts/gcc-fat.sh ../configure
-        #     make clean
-        #     make
-        #   else
-        #     ../configure --prefix=$DIR_LIB
-        #     make clean
-        #     make
-        #     make install
-        #   fi
-        #   ##cp build/lib* ../../$SYSTEM
-        #   #cp build/.libs/libSDL2.a ../../$SYSTEM
-        #   #cp include/* ../../$SYSTEM/include
-        #   #cp ../include/* ../../$SYSTEM/include
-        # popd
-
-          break
-        else
-          console.log 'Unknown external '+evalue
 ###
   modules =
     sdl:

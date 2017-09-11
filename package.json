@@ -21,6 +21,7 @@
     "gulp-rename": "^1.2.2",
     "gulp-repl": "^2.0.3",
     "gulp-run": "^1.7.1",
+    "gulp-watch": "^4.3.11",
     "request": "^2.81.0",
     "tar": "^4.0.1",
     "yargs": "^8.0.2"
