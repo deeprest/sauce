@@ -15,6 +15,7 @@ changed = require 'gulp-changed'
 newer = require 'gulp-newer'
 cache = require 'gulp-cached'
 remember = require 'gulp-remember'
+git = require 'gulp-git'
 
 # apt = require 'apt'
 yargs = require('yargs').argv
@@ -23,12 +24,12 @@ glob = require 'glob'
 merge = require 'deepmerge'
 request = require 'request'
 tar = require 'tar'
+fse = require 'fs-extra'
 
 stream = require 'stream' # TEMP
 
 config = (require './config.js')()
 external = require './external.js'
-util = require './util.js'
 # external.config = config
 
 
@@ -49,19 +50,14 @@ Configure = (done)->
     config = merge config, obj
     target = undefined
     switch config.targetPlatform
-      when 'linux'
-        target = config.target.linux
-        break
-      when 'darwin'
-        target = config.target.darwin
-        break
-      else
-        console.log "platform "+ config,platform +"not supported by build script!"
+      when 'linux' then target = config.target.linux; break
+      when 'darwin' then target = config.target.darwin; break
+      else console.log "platform "+ config,platform +"not supported by build script!"
     config.project = merge config.project, target
     # add lowercase names to mustahce component list
     for component in config.mustache.context.Components
       component['lowerName'] = component.type.toLowerCase()
-    console.log config
+    # console.log config
     console.log 'Configured for platform: ' + config.targetPlatform
     done()
 
@@ -82,6 +78,36 @@ Download = (url,filepath)->
       .on 'error', (err)->
         reject('Error writing file: '+err)
 
+angelscript = ()->
+  return new Promise (resolve,reject) ->
+    resolve()
+
+lua = ()->
+  luaVersion = 'lua-5.3.4'
+  return new Promise (resolve,reject) ->
+    # exec 'curl -R -O http://www.lua.org/ftp/'+luaVersion+'.tar.gz', {cwd:path.resolve(config.dirDownload)}, (err, stdout, stderr) ->
+    #   if err then reject( err ); return
+    #   exec 'tar zxf '+luaVersion+'.tar.gz', {cwd:path.resolve(config.dirDownload)}, (err, stdout, stderr) ->
+    #     if err then reject( err ); return
+    #     makeCommand = ''
+    #     if config.targetPlatform == 'linux' then makeCommand = 'make linux test'
+    #     if config.targetPlatform == 'darwin' then makeCommand = 'make macosx test'
+    #     exec makeCommand, {cwd:path.resolve(config.dirDownload,luaVersion)}, (err, stdout, stderr) ->
+    #       if err then reject( err ); return
+          fs.copyFile path.resolve(config.dirDownload,luaVersion,'src', 'liblua.a'), path.resolve(config.dirExternal,'lib','liblua.a'), (err)->
+            if err then reject( err ); return
+            resolve()
+
+bullet3 = ()->
+  return new Promise (resolve,reject)->
+    git.clone 'https://github.com/bulletphysics/bullet3.git', {args:path.resolve(config.dirDownload,'bullet3')}, (err)->
+      if err then reject(err); return
+      exec './build_cmake_pybullet_double.sh', {cwd:path.resolve(config.dirDownload,'bullet3')}, (err, stdout, stderr) ->
+        if err then reject( 'ERR: build failed: '+err ); return
+        if stderr then reject( 'STDERR: build failed: '+stderr ); return
+        console.log stdout
+        resolve()
+
 box2d = ()->
   # return Download('https://codeload.github.com/erincatto/Box2D/tar.gz/v2.3.1','box2d.tar.gz')
   return (new Promise (resolve,reject) -> resolve())
@@ -89,6 +115,8 @@ box2d = ()->
   .then ()-> return new Promise (resolve,reject) ->
     exec 'cmake -G "Unix Makefiles" -DBOX2D_INSTALL=OFF -DBOX2D_BUILD_SHARED=OFF -DBOX2D_BUILD_EXAMPLES=OFF ..', {cwd:path.resolve(config.dirDownload,'Box2D-2.3.1','Box2D','Build')}, (err, stdout, stderr) ->
       if err then reject( 'cmake failed: '+err ); return
+      fs.copyFile path.resolve(config.dirDownload,luaVersion,'src', 'liblua.a'), path.resolve(config.dirExternal,'lib','liblua.a'), (err)->
+        if err then reject( err ); return
       exec 'cp -r Box2D '+path.resolve(config.dirExternal,'include'), {cwd:path.resolve(config.dirDownload,'Box2D-2.3.1','Box2D')}, (err, stdout, stderr) ->
         if err then reject( 'cp failed: '+err ); return
         exec 'make config="debug"', {cwd:path.resolve(config.dirDownload,'Box2D-2.3.1','Box2D','Build')}, (err, stdout, stderr) ->
@@ -101,21 +129,16 @@ box2d = ()->
 
 sdl = ()->
   return new Promise (resolve,reject) ->
+    if config.targetPlatform == 'darwin'
+      exec 'brew install sdl', (err,stdout,stderr)->
+        if err then reject(err); return;
     resolve()
 
 sdl_build = ()->
-  return new Promise (resolve,reject) ->
-    resolve()
-    SDL_ARCHIVE='SDL-2.0.4-10002'
-    emitter = exec 'curl https://www.libsdl.org/tmp/'+SDL_ARCHIVE+'.tar.gz > '+SDL_ARCHIVE+'.tar.gz', { cwd: config.dirDownload }, (err, stdout, stderr) =>
-      if err then console.error err
-    emitter.on 'stdout', (data)->
-      if data? then console.log data
-    emitter.on 'stderr', (err)->
-      if err then console.error err
-      # exec 'tar -xf '+SDL_ARCHIVE+'.tar.gz', { cwd: config.dirDownload }, (err, stdout, stderr) =>
-      #   if err then console.error err
-    #TODO: build SDL from source
+  SDL_ARCHIVE='SDL-2.0.4-10002'
+  return Download( 'https://www.libsdl.org/tmp/'+SDL_ARCHIVE+'.tar.gz', path.resolve(config.dirDownload,SDL_ARCHIVE+'.tar.gz') )
+  .then ()-> return tar.extract {file:path.resolve(config.dirDownload,SDL_ARCHIVE+'.tar.gz'),cwd:config.dirDownload}, (err, stdout, stderr) -> console.log 'tar extract done'
+  .then ()-> return new Promise (resolve,reject) ->
     # rm $SYSTEM/libSDL*
     # pushd $SDL_ARCHIVE
     #   mkdir build-$SYSTEM
@@ -135,6 +158,8 @@ sdl_build = ()->
     #   #cp include/* ../../$SYSTEM/include
     #   #cp ../include/* ../../$SYSTEM/include
     # popd
+    resolve()
+  .catch (reason)-> console.error reason
 
 glm = ()->
   return new Promise (resolve,reject) ->
@@ -145,9 +170,7 @@ json = ()->
 mojosetup = ()->
   return new Promise (resolve,reject) ->
     resolve()
-angelscript = ()->
-  return new Promise (resolve,reject) ->
-    resolve()
+
 
 Setup = ()->
   ray = []
@@ -160,6 +183,8 @@ Setup = ()->
         when 'box2d' then ray.push box2d; break
         when 'glm' then ray.push glm; break
         when 'json' then ray.push json; break
+        when 'bullet3' then ray.push bullet3; break
+        when 'lua' then ray.push lua; break
         when 'angelscript' then break
         when 'mojosetup' then break
         else console.log 'Unknown external '+evalue
@@ -168,14 +193,13 @@ Setup = ()->
   .then gulp.series ray
 
 Clean = (done)->
-  if fs.existsSync config.dirObj
-    util.rmDirSync config.dirObj
-  fs.unlink path.resolve(config.dirOutput, config.project.outputExecutableName), ->{}
+  if fse.pathExistsSync config.dirObj
+    fse.removeSync config.dirObj
+  fse.removeSync path.resolve(config.dirOutput, config.project.outputExecutableName)
   if config.targetPlatform=='darwin'
-    fs.stat path.resolve(config.dirOutput, config.project.outputExecutableName+'.dSYM'), (err,stats)->
-      fs.unlink path.resolve(config.dirOutput, config.project.outputExecutableName+'.dSYM'), (err)->
-        done()
-  else done()
+    if fse.pathExistsSync path.resolve(config.dirOutput, config.project.outputExecutableName+'.dSYM')
+      fse.removeSync path.resolve(config.dirOutput, config.project.outputExecutableName+'.dSYM')
+  done()
 
 Assets = (done)->
   gulp.src config.project.assetGlob, {cwd:path.resolve(config.dirAsset), ignoreInitial:false }
@@ -294,3 +318,4 @@ gulp.task 'rebuild', gulp.series Clean, Build
 gulp.task 'link', Link
 gulp.task 'build', Build
 gulp.task 'launch', gulp.series gulp.parallel(CSON, Assets), Launch
+gulp.task 'test', lua
