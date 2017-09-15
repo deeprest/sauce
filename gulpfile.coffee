@@ -224,7 +224,7 @@ Mustache = (done)->
 
 watcher = (done)->
   gulp.watch config.mustache.sourceGlob, Mustache
-  gulp.watch '**/*.cson', CSON
+  gulp.watch path.resolve(config.dirAsset,'**/*.cson'), CSON
   gulp.watch config.project.assetGlob, Mustache
 
 CompileAll = (done)->
