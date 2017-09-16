@@ -15,7 +15,6 @@ changed = require 'gulp-changed'
 newer = require 'gulp-newer'
 cache = require 'gulp-cached'
 remember = require 'gulp-remember'
-git = require 'gulp-git'
 
 # apt = require 'apt'
 yargs = require('yargs').argv
@@ -24,13 +23,12 @@ glob = require 'glob'
 merge = require 'deepmerge'
 request = require 'request'
 tar = require 'tar'
-fse = require 'fs-extra'
 
 stream = require 'stream' # TEMP
 
-config = (require './config.js')()
+config = new (require './config.js')()
 external = require './external.js'
-# external.config = config
+util = require './util.js'
 
 
 Start = (done)->
@@ -78,36 +76,6 @@ Download = (url,filepath)->
       .on 'error', (err)->
         reject('Error writing file: '+err)
 
-angelscript = ()->
-  return new Promise (resolve,reject) ->
-    resolve()
-
-lua = ()->
-  luaVersion = 'lua-5.3.4'
-  return new Promise (resolve,reject) ->
-    # exec 'curl -R -O http://www.lua.org/ftp/'+luaVersion+'.tar.gz', {cwd:path.resolve(config.dirDownload)}, (err, stdout, stderr) ->
-    #   if err then reject( err ); return
-    #   exec 'tar zxf '+luaVersion+'.tar.gz', {cwd:path.resolve(config.dirDownload)}, (err, stdout, stderr) ->
-    #     if err then reject( err ); return
-    #     makeCommand = ''
-    #     if config.targetPlatform == 'linux' then makeCommand = 'make linux test'
-    #     if config.targetPlatform == 'darwin' then makeCommand = 'make macosx test'
-    #     exec makeCommand, {cwd:path.resolve(config.dirDownload,luaVersion)}, (err, stdout, stderr) ->
-    #       if err then reject( err ); return
-          fs.copyFile path.resolve(config.dirDownload,luaVersion,'src', 'liblua.a'), path.resolve(config.dirExternal,'lib','liblua.a'), (err)->
-            if err then reject( err ); return
-            resolve()
-
-bullet3 = ()->
-  return new Promise (resolve,reject)->
-    git.clone 'https://github.com/bulletphysics/bullet3.git', {args:path.resolve(config.dirDownload,'bullet3')}, (err)->
-      if err then reject(err); return
-      exec './build_cmake_pybullet_double.sh', {cwd:path.resolve(config.dirDownload,'bullet3')}, (err, stdout, stderr) ->
-        if err then reject( 'ERR: build failed: '+err ); return
-        if stderr then reject( 'STDERR: build failed: '+stderr ); return
-        console.log stdout
-        resolve()
-
 box2d = ()->
   # return Download('https://codeload.github.com/erincatto/Box2D/tar.gz/v2.3.1','box2d.tar.gz')
   return (new Promise (resolve,reject) -> resolve())
@@ -115,8 +83,6 @@ box2d = ()->
   .then ()-> return new Promise (resolve,reject) ->
     exec 'cmake -G "Unix Makefiles" -DBOX2D_INSTALL=OFF -DBOX2D_BUILD_SHARED=OFF -DBOX2D_BUILD_EXAMPLES=OFF ..', {cwd:path.resolve(config.dirDownload,'Box2D-2.3.1','Box2D','Build')}, (err, stdout, stderr) ->
       if err then reject( 'cmake failed: '+err ); return
-      fs.copyFile path.resolve(config.dirDownload,luaVersion,'src', 'liblua.a'), path.resolve(config.dirExternal,'lib','liblua.a'), (err)->
-        if err then reject( err ); return
       exec 'cp -r Box2D '+path.resolve(config.dirExternal,'include'), {cwd:path.resolve(config.dirDownload,'Box2D-2.3.1','Box2D')}, (err, stdout, stderr) ->
         if err then reject( 'cp failed: '+err ); return
         exec 'make config="debug"', {cwd:path.resolve(config.dirDownload,'Box2D-2.3.1','Box2D','Build')}, (err, stdout, stderr) ->
@@ -129,16 +95,21 @@ box2d = ()->
 
 sdl = ()->
   return new Promise (resolve,reject) ->
-    if config.targetPlatform == 'darwin'
-      exec 'brew install sdl', (err,stdout,stderr)->
-        if err then reject(err); return;
     resolve()
 
 sdl_build = ()->
-  SDL_ARCHIVE='SDL-2.0.4-10002'
-  return Download( 'https://www.libsdl.org/tmp/'+SDL_ARCHIVE+'.tar.gz', path.resolve(config.dirDownload,SDL_ARCHIVE+'.tar.gz') )
-  .then ()-> return tar.extract {file:path.resolve(config.dirDownload,SDL_ARCHIVE+'.tar.gz'),cwd:config.dirDownload}, (err, stdout, stderr) -> console.log 'tar extract done'
-  .then ()-> return new Promise (resolve,reject) ->
+  return new Promise (resolve,reject) ->
+    resolve()
+    SDL_ARCHIVE='SDL-2.0.4-10002'
+    emitter = exec 'curl https://www.libsdl.org/tmp/'+SDL_ARCHIVE+'.tar.gz > '+SDL_ARCHIVE+'.tar.gz', { cwd: config.dirDownload }, (err, stdout, stderr) =>
+      if err then console.error err
+    emitter.on 'stdout', (data)->
+      if data? then console.log data
+    emitter.on 'stderr', (err)->
+      if err then console.error err
+      # exec 'tar -xf '+SDL_ARCHIVE+'.tar.gz', { cwd: config.dirDownload }, (err, stdout, stderr) =>
+      #   if err then console.error err
+    #TODO: build SDL from source
     # rm $SYSTEM/libSDL*
     # pushd $SDL_ARCHIVE
     #   mkdir build-$SYSTEM
@@ -158,8 +129,6 @@ sdl_build = ()->
     #   #cp include/* ../../$SYSTEM/include
     #   #cp ../include/* ../../$SYSTEM/include
     # popd
-    resolve()
-  .catch (reason)-> console.error reason
 
 glm = ()->
   return new Promise (resolve,reject) ->
@@ -170,7 +139,9 @@ json = ()->
 mojosetup = ()->
   return new Promise (resolve,reject) ->
     resolve()
-
+angelscript = ()->
+  return new Promise (resolve,reject) ->
+    resolve()
 
 Setup = ()->
   ray = []
@@ -183,8 +154,6 @@ Setup = ()->
         when 'box2d' then ray.push box2d; break
         when 'glm' then ray.push glm; break
         when 'json' then ray.push json; break
-        when 'bullet3' then ray.push bullet3; break
-        when 'lua' then ray.push lua; break
         when 'angelscript' then break
         when 'mojosetup' then break
         else console.log 'Unknown external '+evalue
@@ -193,13 +162,14 @@ Setup = ()->
   .then gulp.series ray
 
 Clean = (done)->
-  if fse.pathExistsSync config.dirObj
-    fse.removeSync config.dirObj
-  fse.removeSync path.resolve(config.dirOutput, config.project.outputExecutableName)
+  if fs.existsSync config.dirObj
+    util.rmDirSync config.dirObj
+  fs.unlink path.resolve(config.dirOutput, config.project.outputExecutableName), ->{}
   if config.targetPlatform=='darwin'
-    if fse.pathExistsSync path.resolve(config.dirOutput, config.project.outputExecutableName+'.dSYM')
-      fse.removeSync path.resolve(config.dirOutput, config.project.outputExecutableName+'.dSYM')
-  done()
+    fs.stat path.resolve(config.dirOutput, config.project.outputExecutableName+'.dSYM'), (err,stats)->
+      fs.unlink path.resolve(config.dirOutput, config.project.outputExecutableName+'.dSYM'), (err)->
+        done()
+  else done()
 
 Assets = (done)->
   gulp.src config.project.assetGlob, {cwd:path.resolve(config.dirAsset), ignoreInitial:false }
@@ -209,6 +179,7 @@ Assets = (done)->
 
 CSON = (done)->
   gulp.src '**/*.cson', {cwd:path.resolve(config.dirAsset), ignoreInitial:false }
+  .pipe cache 'cson'  #, {optimizeMemory:true}
   .pipe gulpcson()
   .pipe print( (filepath)=> return 'CSON=>JSON: '+filepath )
   .pipe gulp.dest( config.dirOutput )
@@ -224,7 +195,7 @@ Mustache = (done)->
 
 watcher = (done)->
   gulp.watch config.mustache.sourceGlob, Mustache
-  gulp.watch path.resolve(config.dirAsset,'**/*.cson'), CSON
+  gulp.watch path.resolve( config.dirAsset, '**/*.cson'), CSON
   gulp.watch config.project.assetGlob, Mustache
 
 CompileAll = (done)->
@@ -271,11 +242,8 @@ CompileIncremental = (done)->
   sourceGlobs = [path.resolve(config.dirSource,config.project.sourceGlob), path.resolve(config.dirExternal,'src', config.project.sourceGlob) ]
   console.log sourceGlobs
   gulp.src sourceGlobs
-  # .pipe newer config.dirObj
-  # .pipe print (filepath)-> return 'NEWER: '+filepath
-  # .pipe changed config.dirObj
-  # .pipe print (filepath)-> return 'changed: '+filepath
-  # .pipe cache 'source'
+  .pipe cache 'source', {optimizeMemory:true}
+  .pipe print (filepath)-> return 'changed: '+filepath
   .pipe run( command, {silent:true})
   .pipe print (filepath)-> return 'compiled: '+filepath
   .pipe rename { dirname: '', extname: '.o'}
@@ -296,7 +264,9 @@ Link = (done)->
     console.log stderr
     if err then console.error 'LINK ERROR: '+err
     else if config.targetPlatform == 'darwin'
-      exec 'dsymutil -o '+path.resolve(config.dirOutput, config.project.outputExecutableName)+'.dSYM '+path.resolve(config.dirOutput, config.project.outputExecutableName), (err, stdout, stderr) ->
+      exec 'dsymutil -o '+path.resolve(config.dirOutput, config.project.outputExecutableName)+'.dSYM '+path.resolve(config.dirOutput, config.project.outputExecutableName),
+      {maxBuffer: 1024 * 1024},
+      (err, stdout, stderr) ->
         if err then console.error err
     done()
 
@@ -314,8 +284,7 @@ gulp.task 'config', Configure
 gulp.task 'setup', Setup
 gulp.task 'watch', watcher
 gulp.task 'clean', Clean
-gulp.task 'rebuild', gulp.series Clean, Build
-gulp.task 'link', Link
-gulp.task 'build', Build
+# gulp.task 'link', Link
+gulp.task 'rebuild', gulp.series Clean, Prebuild, CompileAll, Link
+gulp.task 'build', gulp.series Prebuild, CompileIncremental, Link
 gulp.task 'launch', gulp.series gulp.parallel(CSON, Assets), Launch
-gulp.task 'test', lua
