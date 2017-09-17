@@ -217,7 +217,7 @@ watcher = (done)->
   gulp.watch path.resolve( config.dirAsset, '**/*.cson'), CSON
   gulp.watch config.project.assetGlob, Mustache
 
-CompileAll = (done)->
+CompileAll = ()->
   return new Promise (resolve, reject)->
     if fs.existsSync(config.dirObj) == false
       fs.mkdirSync config.dirObj
@@ -230,7 +230,16 @@ CompileAll = (done)->
     total = sourceFiles.length
     count = total
     for f in sourceFiles
-      command = 'clang++ -g -c -o '+ path.resolve( config.dirObj, path.basename(f,'.cpp')+'.o')+' '+f+' '+comp.join(' ')
+      relpath = ''
+      if f.indexOf(config.dirSource)>=0
+        relpath = path.relative config.dirSource, f
+      if f.indexOf(config.dirExternal)>=0
+        relpath = path.relative config.dirExternal, f
+      dir = path.dirname( path.resolve(config.dirObj, relpath ))
+      if fs.existsSync( dir)== false
+        fs.mkdirSync dir
+      finalPath = path.resolve( config.dirObj, path.dirname(relpath), path.basename(relpath,'.cpp')+'.o')
+      command = 'clang++ -g -c -o '+finalPath+' '+f+' '+comp.join(' ')
       exec command, {maxBuffer: 1024 * 1024}, (err, stdout, stderr) ->
         if count <= 0 then return
         if stdout.length > 0
@@ -249,23 +258,16 @@ CompileAll = (done)->
         if count <= 0
           resolve()
           return
-          # done()
         console.log parseInt( 100*(1-count/total) ).toString()+'%'
-
-# ReadCache = ()->
-#   gulp.src path.resolve( config.dirCache, '**/*.cache' )
-#   .pipe rename { dirname:'' }
-#   .pipe cache 'source'
-#   .pipe print (filepath)-> return 'readcache: '+filepath
 
 PrimeCache = ()->
   sourceGlobs = [path.resolve(config.dirSource,config.project.sourceGlob), path.resolve(config.dirExternal,'src', config.project.sourceGlob) ]
   console.log sourceGlobs
-  gulp.src sourceGlobs
+  return gulp.src sourceGlobs
   .pipe rename { extname:'.cache',}
-  .pipe cache 'source' #, {optimizeMemory:true}
-  .pipe print() # (filepath)-> return 'primed: '+filepath
-  .pipe gulp.dest config.dirCache
+  .pipe cache 'source'
+  .pipe print (filepath)-> return 'primed: '+filepath
+  # .pipe gulp.dest config.dirCache
 
 CompileIncremental = (done)->
   comp = [] #['-g','-x c++','-std=c++11']
@@ -275,8 +277,9 @@ CompileIncremental = (done)->
   # console.log command
   sourceGlobs = [path.resolve(config.dirSource,config.project.sourceGlob), path.resolve(config.dirExternal,'src', config.project.sourceGlob) ]
   console.log sourceGlobs
-  gulp.src sourceGlobs
+  return gulp.src sourceGlobs
   .pipe rename { extname:'.cache' }
+  # .pipe changed config.dirCache
   .pipe cache 'source' #, {optimizeMemory:true}
   .pipe print (filepath)-> return 'changed: '+filepath
   .pipe gulp.dest config.dirCache
