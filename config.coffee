@@ -10,6 +10,7 @@ module.exports = ()->
   this.dirDownload = path.resolve this.dirRoot, 'external'
   this.dirExternal = path.resolve this.dirRoot, 'external', this.targetPlatform
   this.dirBuildRoot = path.resolve this.dirRoot, 'dev-build'
+  this.dirCache = path.resolve this.dirBuildRoot, '.cache'
   this.dirOutput = path.resolve this.dirBuildRoot, this.targetPlatform
   this.dirObj = path.resolve this.dirBuildRoot, '.obj'
   this.dirTool = path.resolve this.dirRoot, 'tool'

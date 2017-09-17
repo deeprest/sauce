@@ -28,7 +28,6 @@ stream = require 'stream' # TEMP
 
 config = new (require './config.js')()
 external = require './external.js'
-util = require './util.js'
 
 
 Start = (done)->
@@ -161,9 +160,29 @@ Setup = ()->
     resolve()
   .then gulp.series ray
 
+
+rmDirSync = (dirPath)->
+  try
+    files = fs.readdirSync dirPath
+  catch
+    e = error;
+    return
+  if files.length > 0
+    for i in files
+      filePath = dirPath + '/' + i;
+      if fs.statSync(filePath).isFile()
+        fs.unlinkSync filePath
+      else
+        rmDirSync filePath
+  return fs.rmdirSync dirPath
+
+
+
 Clean = (done)->
   if fs.existsSync config.dirObj
-    util.rmDirSync config.dirObj
+    rmDirSync config.dirObj
+  if fs.existsSync config.dirCache
+    rmDirSync config.dirCache
   fs.unlink path.resolve(config.dirOutput, config.project.outputExecutableName), ->{}
   if config.targetPlatform=='darwin'
     fs.stat path.resolve(config.dirOutput, config.project.outputExecutableName+'.dSYM'), (err,stats)->
@@ -212,7 +231,7 @@ CompileAll = (done)->
     count = total
     for f in sourceFiles
       command = 'clang++ -g -c -o '+ path.resolve( config.dirObj, path.basename(f,'.cpp')+'.o')+' '+f+' '+comp.join(' ')
-      exec command, (err, stdout, stderr) ->
+      exec command, {maxBuffer: 1024 * 1024}, (err, stdout, stderr) ->
         if count <= 0 then return
         if stdout.length > 0
           console.log 'STDOUT '+stdout
@@ -233,20 +252,37 @@ CompileAll = (done)->
           # done()
         console.log parseInt( 100*(1-count/total) ).toString()+'%'
 
+# ReadCache = ()->
+#   gulp.src path.resolve( config.dirCache, '**/*.cache' )
+#   .pipe rename { dirname:'' }
+#   .pipe cache 'source'
+#   .pipe print (filepath)-> return 'readcache: '+filepath
+
+PrimeCache = ()->
+  sourceGlobs = [path.resolve(config.dirSource,config.project.sourceGlob), path.resolve(config.dirExternal,'src', config.project.sourceGlob) ]
+  console.log sourceGlobs
+  gulp.src sourceGlobs
+  .pipe rename { extname:'.cache',}
+  .pipe cache 'source' #, {optimizeMemory:true}
+  .pipe print() # (filepath)-> return 'primed: '+filepath
+  .pipe gulp.dest config.dirCache
+
 CompileIncremental = (done)->
   comp = [] #['-g','-x c++','-std=c++11']
   comp.push config.project.compilerDefines.join(' ')
   comp.push config.includeDirectories.join(' ')
   command = 'clang++ -x c++ -g -c - -o - '+comp.join(' ')
-  console.log command
+  # console.log command
   sourceGlobs = [path.resolve(config.dirSource,config.project.sourceGlob), path.resolve(config.dirExternal,'src', config.project.sourceGlob) ]
   console.log sourceGlobs
   gulp.src sourceGlobs
-  .pipe cache 'source', {optimizeMemory:true}
+  .pipe rename { extname:'.cache' }
+  .pipe cache 'source' #, {optimizeMemory:true}
   .pipe print (filepath)-> return 'changed: '+filepath
+  .pipe gulp.dest config.dirCache
   .pipe run( command, {silent:true})
+  .pipe rename { extname: '.o'}
   .pipe print (filepath)-> return 'compiled: '+filepath
-  .pipe rename { dirname: '', extname: '.o'}
   .pipe gulp.dest config.dirObj
 
 Link = (done)->
@@ -285,6 +321,7 @@ gulp.task 'setup', Setup
 gulp.task 'watch', watcher
 gulp.task 'clean', Clean
 # gulp.task 'link', Link
-gulp.task 'rebuild', gulp.series Clean, Prebuild, CompileAll, Link
+# gulp.task 'primecache', PrimeCache
+gulp.task 'rebuild', gulp.series Clean, Prebuild, PrimeCache, CompileAll, Link
 gulp.task 'build', gulp.series Prebuild, CompileIncremental, Link
 gulp.task 'launch', gulp.series gulp.parallel(CSON, Assets), Launch
