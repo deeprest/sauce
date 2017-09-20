@@ -1,3 +1,4 @@
+os = require 'os'
 path = require 'path'
 fs = require 'fs'
 exec = (require 'child_process').exec
@@ -16,7 +17,6 @@ newer = require 'gulp-newer'
 cache = require 'gulp-cached'
 remember = require 'gulp-remember'
 
-# apt = require 'apt'
 yargs = require('yargs').argv
 cson = require 'cson'
 glob = require 'glob'
@@ -24,15 +24,88 @@ merge = require 'deepmerge'
 request = require 'request'
 tar = require 'tar'
 
-stream = require 'stream' # TEMP
-
-config = new (require './config.js')()
 external = require './external.js'
 
+rmDirSync = (dirPath)->
+  try
+    files = fs.readdirSync dirPath
+  catch
+    e = error;
+    return
+  if files.length > 0
+    for i in files
+      filePath = dirPath + '/' + i;
+      if fs.statSync(filePath).isFile()
+        fs.unlinkSync filePath
+      else
+        rmDirSync filePath
+  return fs.rmdirSync dirPath
 
-Start = (done)->
-  gulp.repl = repl.start gulp
-  done()
+
+ConfigObject = ()->
+  this.devPlatform = os.platform()
+  this.targetPlatform = this.devPlatform
+  this.dirRoot = path.resolve process.cwd(), '..', '..'
+  this.dirSource = path.resolve this.dirRoot, 'code'
+  this.dirGeneratedSourceOutput = path.resolve this.dirSource, 'mustached'
+  this.dirDownload = path.resolve this.dirRoot, 'external'
+  this.dirExternal = path.resolve this.dirRoot, 'external', this.targetPlatform
+  this.dirBuildRoot = path.resolve this.dirRoot, 'dev-build'
+  this.dirCache = path.resolve this.dirBuildRoot, '.cache'
+  this.dirOutput = path.resolve this.dirBuildRoot, this.targetPlatform
+  this.dirObj = path.resolve this.dirBuildRoot, '.obj'
+  this.dirTool = path.resolve this.dirRoot, 'tool'
+  this.dirAsset = path.resolve this.dirRoot, 'asset'
+  this.includeDirectories = [
+    '-I' + path.resolve this.dirExternal, 'include'
+    '-I' + path.resolve this.dirSource
+    '-I' + path.resolve this.dirGeneratedSourceOutput
+    '-I' + path.resolve this.dirSource,'angelscript'
+    '-I' + path.resolve this.dirSource,'component'
+    '-I/usr/local/include'
+    '-I/usr/include'
+  ]
+  this.linkerDirectories = [
+    '-L' + path.resolve this.dirExternal
+    '-L' + path.resolve this.dirExternal, 'lib'
+    '-L/usr/local/lib'
+    '-L/usr/lib'
+  ]
+  this.mustache = {
+    sourceGlob: '*.mustache'
+    rename: { extname: ''}
+    context: { Components: [] }
+  }
+  this.project = {
+    outputExecutableName: 'default'
+    compilerDefines: [
+      '-g'
+      '-x c++'
+      '-std=c++11'
+    ]
+    external: []
+    linkerArgs: []
+    sourceGlob: '**/*.cpp'
+    watchGlob: '{**/*.cpp,**/*.h,**/*.mustache}'
+    assetGlob: '**/*@(.png|.ogg|.json|.as|.frag|.vert)'
+  }
+  # anything in the active target.[platform] object is merged into this.project
+  this.target = {
+    linux: {
+      external: []
+      compilerDefines: []
+      linkerArgs: []
+    }
+    darwin:{
+      external: []
+      compilerDefines: []
+      linkerArgs:[]
+      frameworks:[]
+    }
+  }
+  return this # be sure to return an object
+
+config = new ConfigObject
 
 Configure = (done)->
   if yargs.config == undefined
@@ -49,7 +122,7 @@ Configure = (done)->
     switch config.targetPlatform
       when 'linux' then target = config.target.linux; break
       when 'darwin' then target = config.target.darwin; break
-      else console.log "platform "+ config,platform +"not supported by build script!"
+      else console.log( 'platform '+ config.targetPlatform +'not supported by build script!')
     config.project = merge config.project, target
     # add lowercase names to mustahce component list
     for component in config.mustache.context.Components
@@ -58,6 +131,9 @@ Configure = (done)->
     console.log 'Configured for platform: ' + config.targetPlatform
     done()
 
+Start = (done)->
+  gulp.repl = repl.start gulp
+  done()
 
 Download = (url,filepath)->
   return new Promise (resolve, reject)->
@@ -92,43 +168,36 @@ box2d = ()->
             # TODO: clean up?
   .catch (reason)-> console.error reason
 
-sdl = ()->
-  return new Promise (resolve,reject) ->
-    resolve()
-
 sdl_build = ()->
+  SDL='SDL-2.0.4-10002'
+  # return Download('https://www.libsdl.org/tmp/'+SDL+'.tar.gz',SDL+'.tar.gz')
+  # .then ()-> return tar.extract {file:path.resolve(config.dirDownload,SDL+'.tar.gz'),cwd:config.dirDownload }, (err, stdout, stderr) -> console.log 'tar extract done'
   return new Promise (resolve,reject) ->
-    resolve()
-    SDL_ARCHIVE='SDL-2.0.4-10002'
-    emitter = exec 'curl https://www.libsdl.org/tmp/'+SDL_ARCHIVE+'.tar.gz > '+SDL_ARCHIVE+'.tar.gz', { cwd: config.dirDownload }, (err, stdout, stderr) =>
-      if err then console.error err
-    emitter.on 'stdout', (data)->
-      if data? then console.log data
-    emitter.on 'stderr', (err)->
-      if err then console.error err
-      # exec 'tar -xf '+SDL_ARCHIVE+'.tar.gz', { cwd: config.dirDownload }, (err, stdout, stderr) =>
-      #   if err then console.error err
-    #TODO: build SDL from source
-    # rm $SYSTEM/libSDL*
-    # pushd $SDL_ARCHIVE
-    #   mkdir build-$SYSTEM
-    #   cd build-$SYSTEM
-    #   if [[ "$SYSTEM" == "darwin" ]]; then
-    #     CC=$(pwd)/../build-scripts/gcc-fat.sh ../configure
-    #     make clean
-    #     make
-    #   else
-    #     ../configure --prefix=$DIR_LIB
-    #     make clean
-    #     make
-    #     make install
-    #   fi
-    #   ##cp build/lib* ../../$SYSTEM
+  # .then ()-> return new Promise (resolve,reject) ->
+    buildDir = path.resolve(config.dirDownload,SDL,'build-'+config.targetPlatform)
+    fs.mkdir buildDir, (err)->
+      #if err then reject(err); return
+      switch config.targetPlatform
+        when 'linux'
+          #'../configure --prefix=$DIR_LIB; make clean; make; make install'
+          break
+        when 'darwin'
+          #; make clean; make
+          spawn '../configure', {shell:true,cwd:buildDir,env:{'CC':path.resolve(SDL,'build-scripts/gcc-fat.sh')}}, (err, stdout, stderr) ->
+            if err then reject( 'sdl build failed: '+err ); return
+            spawn 'make clean; make', {shell:true,cwd:buildDir}, (err, stdout, stderr) ->
+              if err then reject( 'sdl build failed: '+err ); return
+              resolve()
+          break
+        else
+          console.log "target platform "+ config.targetPlatform +"not supported by build script!"
+    # clean
     #   #cp build/.libs/libSDL2.a ../../$SYSTEM
     #   #cp include/* ../../$SYSTEM/include
     #   #cp ../include/* ../../$SYSTEM/include
-    # popd
-
+sdl = ()->
+  return new Promise (resolve,reject) ->
+    resolve()
 glm = ()->
   return new Promise (resolve,reject) ->
     resolve()
@@ -160,24 +229,6 @@ Setup = ()->
     resolve()
   .then gulp.series ray
 
-
-rmDirSync = (dirPath)->
-  try
-    files = fs.readdirSync dirPath
-  catch
-    e = error;
-    return
-  if files.length > 0
-    for i in files
-      filePath = dirPath + '/' + i;
-      if fs.statSync(filePath).isFile()
-        fs.unlinkSync filePath
-      else
-        rmDirSync filePath
-  return fs.rmdirSync dirPath
-
-
-
 Clean = (done)->
   if fs.existsSync config.dirObj
     rmDirSync config.dirObj
@@ -191,21 +242,23 @@ Clean = (done)->
   else done()
 
 Assets = (done)->
-  gulp.src config.project.assetGlob, {cwd:path.resolve(config.dirAsset), ignoreInitial:false }
+  return gulp.src config.project.assetGlob, {cwd:path.resolve(config.dirAsset), ignoreInitial:false }
+  .pipe cache 'assets'
   .pipe print( (filepath)=> return 'Asset copied: '+filepath )
   .pipe gulp.dest( config.dirOutput )
   .on 'finish', ()-> done()
 
 CSON = (done)->
-  gulp.src '**/*.cson', {cwd:path.resolve(config.dirAsset), ignoreInitial:false }
-  .pipe cache 'cson'  #, {optimizeMemory:true}
+  return gulp.src '**/*.cson', {cwd:path.resolve(config.dirAsset), ignoreInitial:false }
+  .pipe cache 'cson'
   .pipe gulpcson()
   .pipe print( (filepath)=> return 'CSON=>JSON: '+filepath )
   .pipe gulp.dest( config.dirOutput )
   .on 'finish', ()-> done()
 
 Mustache = (done)->
-  gulp.src config.mustache.sourceGlob, {cwd:path.resolve(config.dirSource)}
+  return gulp.src config.mustache.sourceGlob, {cwd:path.resolve(config.dirSource), ignoreInitial:false }
+  .pipe cache 'mustache'
   .pipe mustache( config.mustache.context )
   .pipe rename( config.mustache.rename )
   .pipe print (filepath)=> return 'Mustaching: '+filepath
@@ -262,27 +315,21 @@ CompileAll = ()->
 
 PrimeCache = ()->
   sourceGlobs = [path.resolve(config.dirSource,config.project.sourceGlob), path.resolve(config.dirExternal,'src', config.project.sourceGlob) ]
-  console.log sourceGlobs
   return gulp.src sourceGlobs
   .pipe rename { extname:'.cache',}
   .pipe cache 'source'
-  .pipe print (filepath)-> return 'primed: '+filepath
-  # .pipe gulp.dest config.dirCache
 
 CompileIncremental = (done)->
   comp = [] #['-g','-x c++','-std=c++11']
   comp.push config.project.compilerDefines.join(' ')
   comp.push config.includeDirectories.join(' ')
   command = 'clang++ -x c++ -g -c - -o - '+comp.join(' ')
-  # console.log command
   sourceGlobs = [path.resolve(config.dirSource,config.project.sourceGlob), path.resolve(config.dirExternal,'src', config.project.sourceGlob) ]
-  console.log sourceGlobs
   return gulp.src sourceGlobs
   .pipe rename { extname:'.cache' }
-  # .pipe changed config.dirCache
   .pipe cache 'source' #, {optimizeMemory:true}
   .pipe print (filepath)-> return 'changed: '+filepath
-  .pipe gulp.dest config.dirCache
+  # .pipe gulp.dest config.dirCache #no reason to write out the cache without a read somewhere
   .pipe run( command, {silent:true})
   .pipe rename { extname: '.o'}
   .pipe print (filepath)-> return 'compiled: '+filepath
@@ -318,13 +365,12 @@ Launch = (done)->
 Prebuild = gulp.parallel Mustache, CSON, Assets
 Build = gulp.series Prebuild, CompileAll, Link
 
-gulp.task 'default', gulp.series Configure, Start
+gulp.task 'default', gulp.series Configure, Start, watcher
 gulp.task 'config', Configure
 gulp.task 'setup', Setup
 gulp.task 'watch', watcher
 gulp.task 'clean', Clean
-# gulp.task 'link', Link
-# gulp.task 'primecache', PrimeCache
+gulp.task 'link', Link
 gulp.task 'rebuild', gulp.series Clean, Prebuild, PrimeCache, CompileAll, Link
 gulp.task 'build', gulp.series Prebuild, CompileIncremental, Link
 gulp.task 'launch', gulp.series gulp.parallel(CSON, Assets), Launch

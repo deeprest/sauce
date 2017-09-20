@@ -10,14 +10,12 @@ indie game development tool for C++ projects
 * Builds project using [Clang](http://clang.llvm.org/ "but there's no reason it couldn't use another compiler" )
 * Project configured from a .cson file (needs work)
 * Downloads and builds project libraries from repo or archive
+* Incremental builds
 
 ## Todo
-* Incremental builds (gulp-changed)
 * Generate installer packages using mojosetup
 * Re-test AngelScript binding generator
 * example project
-* generate CMakeLists.txt?
-* cleanup: remove unnecessary node modules
 
 ### Required to generate AngelScript bindings
 - Linux: libclang package must be installed, and the library must be in your path

@@ -1,5 +1,5 @@
-fs = require 'fs'
-path = require 'path'
+# fs = require 'fs'
+# path = require 'path'
 # request = require 'request'
 # tar = require 'tar'
 # exec = (require 'child_process').exec
