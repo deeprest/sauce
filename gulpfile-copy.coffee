@@ -24,34 +24,20 @@ merge = require 'deepmerge'
 request = require 'request'
 tar = require 'tar'
 
+stream = require 'stream' # TEMP
 external = require './external.js'
 
-mkdirSync = (dir) ->
-  if dir.indexOf('/')==0
-    dir = dir.substring(1)
-  ray = dir.split('/')
-  currentPath=''
-  ray.forEach (element)->
-    currentPath += '/'+element
-    try
-      fs.mkdirSync currentPath
-    catch
-      console.log 'exists: '+currentPath
 
-rmdirSync = (dirPath)->
-  try
-    files = fs.readdirSync dirPath
-  catch
-    return error
-  if files.length > 0
-    for i in files
-      filePath = dirPath + '/' + i
-      if fs.statSync(filePath).isFile()
-        fs.unlinkSync filePath
-      else
-        rmdirSync filePath
-  return fs.rmdirSync dirPath
-
+CreateDirectory = (targetDir) ->
+  initDir = ''
+  if path.isAbsolute(targetDir)
+    initDir = path.sep
+  targetDir.split(path.sep).reduce( (parentDir, childDir) ->
+    curDir = path.resolve(parentDir, childDir)
+    if fs.existsSync(curDir)==false
+      fs.mkdirSync(curDir)
+    return curDir
+  , initDir)
 
 ConfigObject = ()->
   this.devPlatform = os.platform()
@@ -118,6 +104,10 @@ ConfigObject = ()->
 
 config = new ConfigObject
 
+Start = (done)->
+  gulp.repl = repl.start gulp
+  done()
+
 Configure = (done)->
   if yargs.config == undefined
     yargs.config = 'example.cson'
@@ -131,9 +121,14 @@ Configure = (done)->
     config = merge config, obj
     target = undefined
     switch config.targetPlatform
-      when 'linux' then target = config.target.linux; break
-      when 'darwin' then target = config.target.darwin; break
-      else console.log( 'platform '+ config.targetPlatform +'not supported by build script!')
+      when 'linux'
+        target = config.target.linux
+        break
+      when 'darwin'
+        target = config.target.darwin
+        break
+      else
+        console.log "platform "+ config,platform +"not supported by build script!"
     config.project = merge config.project, target
     # add lowercase names to mustahce component list
     for component in config.mustache.context.Components
@@ -142,9 +137,6 @@ Configure = (done)->
     console.log 'Configured for platform: ' + config.targetPlatform
     done()
 
-Start = (done)->
-  gulp.repl = repl.start gulp
-  done()
 
 Download = (url,filepath)->
   return new Promise (resolve, reject)->
@@ -179,36 +171,43 @@ box2d = ()->
             # TODO: clean up?
   .catch (reason)-> console.error reason
 
-sdl_build = ()->
-  SDL='SDL-2.0.4-10002'
-  # return Download('https://www.libsdl.org/tmp/'+SDL+'.tar.gz',SDL+'.tar.gz')
-  # .then ()-> return tar.extract {file:path.resolve(config.dirDownload,SDL+'.tar.gz'),cwd:config.dirDownload }, (err, stdout, stderr) -> console.log 'tar extract done'
-  return new Promise (resolve,reject) ->
-  # .then ()-> return new Promise (resolve,reject) ->
-    buildDir = path.resolve(config.dirDownload,SDL,'build-'+config.targetPlatform)
-    fs.mkdir buildDir, (err)->
-      #if err then reject(err); return
-      switch config.targetPlatform
-        when 'linux'
-          #'../configure --prefix=$DIR_LIB; make clean; make; make install'
-          break
-        when 'darwin'
-          #; make clean; make
-          spawn '../configure', {shell:true,cwd:buildDir,env:{'CC':path.resolve(SDL,'build-scripts/gcc-fat.sh')}}, (err, stdout, stderr) ->
-            if err then reject( 'sdl build failed: '+err ); return
-            spawn 'make clean; make', {shell:true,cwd:buildDir}, (err, stdout, stderr) ->
-              if err then reject( 'sdl build failed: '+err ); return
-              resolve()
-          break
-        else
-          console.log "target platform "+ config.targetPlatform +"not supported by build script!"
-    # clean
-    #   #cp build/.libs/libSDL2.a ../../$SYSTEM
-    #   #cp include/* ../../$SYSTEM/include
-    #   #cp ../include/* ../../$SYSTEM/include
 sdl = ()->
   return new Promise (resolve,reject) ->
     resolve()
+
+sdl_build = ()->
+  return new Promise (resolve,reject) ->
+    resolve()
+    SDL_ARCHIVE='SDL-2.0.4-10002'
+    emitter = exec 'curl https://www.libsdl.org/tmp/'+SDL_ARCHIVE+'.tar.gz > '+SDL_ARCHIVE+'.tar.gz', { cwd: config.dirDownload }, (err, stdout, stderr) =>
+      if err then console.error err
+    emitter.on 'stdout', (data)->
+      if data? then console.log data
+    emitter.on 'stderr', (err)->
+      if err then console.error err
+      # exec 'tar -xf '+SDL_ARCHIVE+'.tar.gz', { cwd: config.dirDownload }, (err, stdout, stderr) =>
+      #   if err then console.error err
+    #TODO: build SDL from source
+    # rm $SYSTEM/libSDL*
+    # pushd $SDL_ARCHIVE
+    #   mkdir build-$SYSTEM
+    #   cd build-$SYSTEM
+    #   if [[ "$SYSTEM" == "darwin" ]]; then
+    #     CC=$(pwd)/../build-scripts/gcc-fat.sh ../configure
+    #     make clean
+    #     make
+    #   else
+    #     ../configure --prefix=$DIR_LIB
+    #     make clean
+    #     make
+    #     make install
+    #   fi
+    #   ##cp build/lib* ../../$SYSTEM
+    #   #cp build/.libs/libSDL2.a ../../$SYSTEM
+    #   #cp include/* ../../$SYSTEM/include
+    #   #cp ../include/* ../../$SYSTEM/include
+    # popd
+
 glm = ()->
   return new Promise (resolve,reject) ->
     resolve()
@@ -242,9 +241,7 @@ Setup = ()->
 
 Clean = (done)->
   if fs.existsSync config.dirObj
-    rmdirSync config.dirObj
-  if fs.existsSync config.dirCache
-    rmdirSync config.dirCache
+    util.rmDirSync config.dirObj
   fs.unlink path.resolve(config.dirOutput, config.project.outputExecutableName), ->{}
   if config.targetPlatform=='darwin'
     fs.stat path.resolve(config.dirOutput, config.project.outputExecutableName+'.dSYM'), (err,stats)->
@@ -253,23 +250,20 @@ Clean = (done)->
   else done()
 
 Assets = (done)->
-  return gulp.src config.project.assetGlob, {cwd:path.resolve(config.dirAsset), ignoreInitial:false }
-  .pipe cache 'assets'
+  gulp.src config.project.assetGlob, {cwd:path.resolve(config.dirAsset), ignoreInitial:false }
   .pipe print( (filepath)=> return 'Asset copied: '+filepath )
   .pipe gulp.dest( config.dirOutput )
   .on 'finish', ()-> done()
 
 CSON = (done)->
-  return gulp.src '**/*.cson', {cwd:path.resolve(config.dirAsset), ignoreInitial:false }
-  .pipe cache 'cson'
+  gulp.src '**/*.cson', {cwd:path.resolve(config.dirAsset), ignoreInitial:false }
   .pipe gulpcson()
   .pipe print( (filepath)=> return 'CSON=>JSON: '+filepath )
   .pipe gulp.dest( config.dirOutput )
   .on 'finish', ()-> done()
 
 Mustache = (done)->
-  return gulp.src config.mustache.sourceGlob, {cwd:path.resolve(config.dirSource), ignoreInitial:false }
-  .pipe cache 'mustache'
+  gulp.src config.mustache.sourceGlob, {cwd:path.resolve(config.dirSource)}
   .pipe mustache( config.mustache.context )
   .pipe rename( config.mustache.rename )
   .pipe print (filepath)=> return 'Mustaching: '+filepath
@@ -278,13 +272,13 @@ Mustache = (done)->
 
 watcher = (done)->
   gulp.watch config.mustache.sourceGlob, Mustache
-  gulp.watch path.resolve( config.dirAsset, '**/*.cson'), CSON
+  gulp.watch '**/*.cson', CSON
   gulp.watch config.project.assetGlob, Mustache
 
-CompileAll = ()->
+CompileAll = (done)->
   return new Promise (resolve, reject)->
     if fs.existsSync(config.dirObj) == false
-      mkdirSync config.dirObj
+      fs.mkdirSync config.dirObj
     sourceFiles = glob.sync path.resolve(config.dirSource,config.project.sourceGlob)
     externalSourceFiles = glob.sync path.resolve(config.dirExternal,'src', config.project.sourceGlob)
     sourceFiles.push externalSourceFiles.join(' ')
@@ -294,63 +288,45 @@ CompileAll = ()->
     total = sourceFiles.length
     count = total
     for f in sourceFiles
-      console.log 'sourcefile: '+f
-      relpath = ''
-      if f.indexOf(config.dirSource)>=0
-        relpath = path.relative config.dirSource, f
-      if f.indexOf(config.dirExternal)>=0
-        relpath = path.relative config.dirExternal, f
-      if relpath.length == 0
-        continue
-      dir = path.dirname( path.resolve(config.dirObj, relpath ))
-      if fs.existsSync( dir)== false
-        mkdirSync dir
-      finalPath = path.resolve( config.dirObj, path.dirname(relpath), path.basename(relpath,'.cpp')+'.o')
-      console.log 'finalPath: '+finalPath
-
-      command = 'clang++ -g -c -o '+finalPath+' '+f+' '+comp.join(' ')
-      exec command, {maxBuffer: 1024 * 1024}, (err, stdout, stderr) ->
-        console.log command
-        if count <= 0
-          return
+      command = 'clang++ -Wall -g -c -o '+ path.resolve( config.dirObj, path.basename(f,'.cpp')+'.o')+' '+f+' '+comp.join(' ')
+      exec command, (err, stdout, stderr) ->
+        if count <= 0 then return
         if stdout.length > 0
           console.log 'STDOUT '+stdout
           if stdout.indexOf('error:') >= 0
             count = 0
             reject( new Error('stdout') )
-            # return
+            return
         if stderr.length > 0
           console.log 'STDERROR '+stderr
           if stderr.indexOf('error:')>=0
             count = 0
             reject( new Error('stderr') )
-            # return
+            return
         count--;
         if count <= 0
           resolve()
           return
+          # done()
         console.log parseInt( 100*(1-count/total) ).toString()+'%'
-
-PrimeCache = ()->
-  sourceGlobs = [ path.resolve(config.dirSource,config.project.sourceGlob), path.resolve(config.dirExternal,'src', config.project.sourceGlob) ]
-  return gulp.src sourceGlobs
-  .pipe rename { extname:'.cache' }
-  .pipe cache 'source'
 
 CompileIncremental = (done)->
   comp = [] #['-g','-x c++','-std=c++11']
   comp.push config.project.compilerDefines.join(' ')
   comp.push config.includeDirectories.join(' ')
   command = 'clang++ -x c++ -g -c - -o - '+comp.join(' ')
+  console.log command
   sourceGlobs = [path.resolve(config.dirSource,config.project.sourceGlob), path.resolve(config.dirExternal,'src', config.project.sourceGlob) ]
-  return gulp.src sourceGlobs
-  .pipe rename { extname:'.cache' }
-  .pipe cache 'source' #, {optimizeMemory:true}
-  .pipe print (filepath)-> return 'changed: '+filepath
-  # .pipe gulp.dest config.dirCache #no reason to write out the cache without a read somewhere
+  console.log sourceGlobs
+  gulp.src sourceGlobs
+  # .pipe newer config.dirObj
+  # .pipe print (filepath)-> return 'NEWER: '+filepath
+  # .pipe changed config.dirObj
+  # .pipe print (filepath)-> return 'changed: '+filepath
+  # .pipe cache 'source'
   .pipe run( command, {silent:true})
-  .pipe rename { extname: '.o'}
   .pipe print (filepath)-> return 'compiled: '+filepath
+  .pipe rename { dirname: '', extname: '.o'}
   .pipe gulp.dest config.dirObj
 
 Link = (done)->
@@ -368,9 +344,7 @@ Link = (done)->
     console.log stderr
     if err then console.error 'LINK ERROR: '+err
     else if config.targetPlatform == 'darwin'
-      exec 'dsymutil -o '+path.resolve(config.dirOutput, config.project.outputExecutableName)+'.dSYM '+path.resolve(config.dirOutput, config.project.outputExecutableName),
-      {maxBuffer: 1024 * 1024},
-      (err, stdout, stderr) ->
+      exec 'dsymutil -o '+path.resolve(config.dirOutput, config.project.outputExecutableName)+'.dSYM '+path.resolve(config.dirOutput, config.project.outputExecutableName), (err, stdout, stderr) ->
         if err then console.error err
     done()
 
@@ -383,12 +357,12 @@ Launch = (done)->
 Prebuild = gulp.parallel Mustache, CSON, Assets
 Build = gulp.series Prebuild, CompileAll, Link
 
-gulp.task 'default', gulp.series Configure, Start, watcher
+gulp.task 'default', gulp.series Configure, Start
 gulp.task 'config', Configure
 gulp.task 'setup', Setup
 gulp.task 'watch', watcher
 gulp.task 'clean', Clean
+gulp.task 'rebuild', gulp.series Clean, Build
 gulp.task 'link', Link
-gulp.task 'rebuild', gulp.series Clean, Prebuild, PrimeCache, CompileAll, Link
-gulp.task 'build', gulp.series Prebuild, CompileIncremental, Link
+gulp.task 'build', Build
 gulp.task 'launch', gulp.series gulp.parallel(CSON, Assets), Launch
