@@ -10,12 +10,17 @@ mustache = require "gulp-mustache"
 watch = require 'gulp-watch'
 gulpcson = require 'gulp-cson'
 print = require 'gulp-print'
-run = require 'gulp-run'
 repl = require 'gulp-repl'
 changed = require 'gulp-changed'
 newer = require 'gulp-newer'
 cache = require 'gulp-cached'
 remember = require 'gulp-remember'
+
+run = require 'gulp-run'
+gulpexec = require 'gulp-exec'
+sourcemaps = require 'gulp-sourcemaps'
+
+clang = require './gulpclang.js'
 
 yargs = require('yargs').argv
 cson = require 'cson'
@@ -85,7 +90,10 @@ ConfigObject = ()->
     ]
     external: []
     linkerArgs: []
-    sourceGlob: '**/*.cpp'
+    sourceGlobs:[
+      path.resolve(this.dirSource, '**/*.cpp')
+      path.resolve(this.dirExternal, 'src', '**/*.cpp')
+    ]
     watchGlob: '{**/*.cpp,**/*.h,**/*.mustache}'
     assetGlob: '**/*@(.png|.ogg|.json|.as|.frag|.vert)'
   }
@@ -165,7 +173,6 @@ box2d = ()->
           exec 'cp libBox2D.a '+path.resolve(config.dirExternal,'lib'), {cwd:path.resolve(config.dirDownload,'Box2D-2.3.1','Box2D','Build','Box2D')}, (err, stdout, stderr) ->
             if err then reject( 'cp failed: '+err ); return
             resolve()
-            # TODO: clean up?
   .catch (reason)-> console.error reason
 
 sdl_build = ()->
@@ -274,9 +281,10 @@ CompileAll = ()->
   return new Promise (resolve, reject)->
     if fs.existsSync(config.dirObj) == false
       fs.mkdirSync config.dirObj
-    sourceFiles = glob.sync path.resolve(config.dirSource,config.project.sourceGlob)
-    externalSourceFiles = glob.sync path.resolve(config.dirExternal,'src', config.project.sourceGlob)
-    sourceFiles.push externalSourceFiles.join(' ')
+    sourceFiles = []
+    for sg in config.project.sourceGlobs
+      ray = glob.sync sg
+      sourceFiles = sourceFiles.concat ray
     comp = [] #['-g','-x c++','-std=c++11']
     comp.push config.project.compilerDefines.join(' ')
     comp.push config.includeDirectories.join(' ')
@@ -288,6 +296,7 @@ CompileAll = ()->
         relpath = path.relative config.dirSource, f
       if f.indexOf(config.dirExternal)>=0
         relpath = path.relative config.dirExternal, f
+      # console.log relpath
       dir = path.dirname( path.resolve(config.dirObj, relpath ))
       if fs.existsSync( dir)== false
         fs.mkdirSync dir
@@ -313,10 +322,9 @@ CompileAll = ()->
           return
         console.log parseInt( 100*(1-count/total) ).toString()+'%'
 
+
 PrimeCache = ()->
-  sourceGlobs = [path.resolve(config.dirSource,config.project.sourceGlob), path.resolve(config.dirExternal,'src', config.project.sourceGlob) ]
-  return gulp.src sourceGlobs
-  .pipe rename { extname:'.cache',}
+  return gulp.src config.project.sourceGlobs
   .pipe cache 'source'
 
 CompileIncremental = (done)->
@@ -324,9 +332,7 @@ CompileIncremental = (done)->
   comp.push config.project.compilerDefines.join(' ')
   comp.push config.includeDirectories.join(' ')
   command = 'clang++ -x c++ -g -c - -o - '+comp.join(' ')
-  sourceGlobs = [path.resolve(config.dirSource,config.project.sourceGlob), path.resolve(config.dirExternal,'src', config.project.sourceGlob) ]
-  return gulp.src sourceGlobs
-  .pipe rename { extname:'.cache' }
+  return gulp.src config.project.sourceGlobs
   .pipe cache 'source' #, {optimizeMemory:true}
   .pipe print (filepath)-> return 'changed: '+filepath
   # .pipe gulp.dest config.dirCache #no reason to write out the cache without a read somewhere

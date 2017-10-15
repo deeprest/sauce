@@ -36,7 +36,6 @@
 #         exec 'cp libBox2D.a '+path.resolve(config.dirExternal,'lib'), {cwd:path.resolve(config.dirDownload,'Box2D-2.3.1','Box2D','Build','Box2D')}, (err, stdout, stderr) ->
 #           if err then reject( 'cp failed: '+err ); return
 #           resolve()
-#           # TODO: clean up?
 #   # return
 # # .catch (reason)-> console.error reason
 
@@ -379,7 +378,6 @@ function sauce
 
 function physfs
 {
-  #TODO: check for mercurial?
   pushd $EXTERNAL
     #hg clone -u release-2.0.3 http://hg.icculus.org/icculus/physfs physfs
     pushd physfs
