@@ -301,6 +301,7 @@ CompileAll = ()->
       if f.indexOf(config.dirExternal)>=0
         relpath = path.relative config.dirExternal, f
       if relpath.length == 0
+        count--;
         continue
       dir = path.dirname( path.resolve(config.dirObj, relpath ))
       if fs.existsSync( dir)== false
@@ -310,26 +311,24 @@ CompileAll = ()->
 
       command = 'clang++ -g -c -o '+finalPath+' '+f+' '+comp.join(' ')
       exec command, {maxBuffer: 1024 * 1024}, (err, stdout, stderr) ->
-        console.log command
-        if count <= 0
-          return
         if stdout.length > 0
           console.log 'STDOUT '+stdout
           if stdout.indexOf('error:') >= 0
             count = 0
             reject( new Error('stdout') )
-            # return
+            return
         if stderr.length > 0
           console.log 'STDERROR '+stderr
           if stderr.indexOf('error:')>=0
             count = 0
             reject( new Error('stderr') )
-            # return
+            return
         count--;
         if count <= 0
           resolve()
           return
         console.log parseInt( 100*(1-count/total) ).toString()+'%'
+
 
 PrimeCache = ()->
   sourceGlobs = [ path.resolve(config.dirSource,config.project.sourceGlob), path.resolve(config.dirExternal,'src', config.project.sourceGlob) ]
