@@ -31,19 +31,30 @@ tar = require 'tar'
 
 external = require './external.js'
 
-rmDirSync = (dirPath)->
+mkdirSync = (dir) ->
+  if dir.indexOf('/')==0
+    dir = dir.substring(1)
+  ray = dir.split('/')
+  currentPath=''
+  ray.forEach (element)->
+    currentPath += '/'+element
+    try
+      fs.mkdirSync currentPath
+    catch
+      console.log 'exists: '+currentPath
+
+rmdirSync = (dirPath)->
   try
     files = fs.readdirSync dirPath
   catch
-    e = error;
-    return
+    return error
   if files.length > 0
     for i in files
-      filePath = dirPath + '/' + i;
+      filePath = dirPath + '/' + i
       if fs.statSync(filePath).isFile()
         fs.unlinkSync filePath
       else
-        rmDirSync filePath
+        rmdirSync filePath
   return fs.rmdirSync dirPath
 
 
@@ -238,9 +249,9 @@ Setup = ()->
 
 Clean = (done)->
   if fs.existsSync config.dirObj
-    rmDirSync config.dirObj
+    rmdirSync config.dirObj
   if fs.existsSync config.dirCache
-    rmDirSync config.dirCache
+    rmdirSync config.dirCache
   fs.unlink path.resolve(config.dirOutput, config.project.outputExecutableName), ->{}
   if config.targetPlatform=='darwin'
     fs.stat path.resolve(config.dirOutput, config.project.outputExecutableName+'.dSYM'), (err,stats)->
@@ -280,30 +291,33 @@ watcher = (done)->
 CompileAll = ()->
   return new Promise (resolve, reject)->
     if fs.existsSync(config.dirObj) == false
-      fs.mkdirSync config.dirObj
-    sourceFiles = []
-    for sg in config.project.sourceGlobs
-      ray = glob.sync sg
-      sourceFiles = sourceFiles.concat ray
+      mkdirSync config.dirObj
+    sourceFiles = glob.sync path.resolve(config.dirSource,config.project.sourceGlob)
+    externalSourceFiles = glob.sync path.resolve(config.dirExternal,'src', config.project.sourceGlob)
+    sourceFiles.push externalSourceFiles.join(' ')
     comp = [] #['-g','-x c++','-std=c++11']
     comp.push config.project.compilerDefines.join(' ')
     comp.push config.includeDirectories.join(' ')
     total = sourceFiles.length
     count = total
     for f in sourceFiles
+      console.log 'sourcefile: '+f
       relpath = ''
       if f.indexOf(config.dirSource)>=0
         relpath = path.relative config.dirSource, f
       if f.indexOf(config.dirExternal)>=0
         relpath = path.relative config.dirExternal, f
-      # console.log relpath
+      if relpath.length == 0
+        count--;
+        continue
       dir = path.dirname( path.resolve(config.dirObj, relpath ))
       if fs.existsSync( dir)== false
-        fs.mkdirSync dir
+        mkdirSync dir
       finalPath = path.resolve( config.dirObj, path.dirname(relpath), path.basename(relpath,'.cpp')+'.o')
+      console.log 'finalPath: '+finalPath
+
       command = 'clang++ -g -c -o '+finalPath+' '+f+' '+comp.join(' ')
       exec command, {maxBuffer: 1024 * 1024}, (err, stdout, stderr) ->
-        if count <= 0 then return
         if stdout.length > 0
           console.log 'STDOUT '+stdout
           if stdout.indexOf('error:') >= 0
@@ -324,7 +338,9 @@ CompileAll = ()->
 
 
 PrimeCache = ()->
-  return gulp.src config.project.sourceGlobs
+  sourceGlobs = [ path.resolve(config.dirSource,config.project.sourceGlob), path.resolve(config.dirExternal,'src', config.project.sourceGlob) ]
+  return gulp.src sourceGlobs
+  .pipe rename { extname:'.cache' }
   .pipe cache 'source'
 
 CompileIncremental = (done)->
