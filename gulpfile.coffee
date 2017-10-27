@@ -17,7 +17,6 @@ cache = require 'gulp-cached'
 remember = require 'gulp-remember'
 
 run = require 'gulp-run'
-gulpexec = require 'gulp-exec'
 sourcemaps = require 'gulp-sourcemaps'
 
 clang = require './gulpclang.js'
