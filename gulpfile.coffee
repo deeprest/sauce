@@ -60,32 +60,19 @@ rmdirSync = (dirPath)->
 ConfigObject = ()->
   this.devPlatform = os.platform()
   this.targetPlatform = this.devPlatform
-  this.dirRoot = path.resolve process.cwd(), '..', '..'
-  this.dirSource = path.resolve this.dirRoot, 'code'
-  this.dirGeneratedSourceOutput = path.resolve this.dirSource, 'mustached'
-  this.dirDownload = path.resolve this.dirRoot, 'external'
-  this.dirExternal = path.resolve this.dirRoot, 'external', this.targetPlatform
-  this.dirBuildRoot = path.resolve this.dirRoot, 'dev-build'
-  this.dirCache = path.resolve this.dirBuildRoot, '.cache'
-  this.dirOutput = path.resolve this.dirBuildRoot, this.targetPlatform
-  this.dirObj = path.resolve this.dirBuildRoot, '.obj'
-  this.dirTool = path.resolve this.dirRoot, 'tool'
-  this.dirAsset = path.resolve this.dirRoot, 'asset'
-  this.includeDirectories = [
-    '-I' + path.resolve this.dirExternal, 'include'
-    '-I' + path.resolve this.dirSource
-    '-I' + path.resolve this.dirGeneratedSourceOutput
-    '-I' + path.resolve this.dirSource,'angelscript'
-    '-I' + path.resolve this.dirSource,'component'
-    '-I/usr/local/include'
-    '-I/usr/include'
-  ]
-  this.linkerDirectories = [
-    '-L' + path.resolve this.dirExternal
-    '-L' + path.resolve this.dirExternal, 'lib'
-    '-L/usr/local/lib'
-    '-L/usr/lib'
-  ]
+  this.path = {
+    Root : undefined
+    Source : undefined
+    GeneratedSourceOutput : undefined
+    Download : undefined
+    External : undefined
+    BuildRoot : undefined
+    Cache : undefined
+    Output : undefined
+    Obj : undefined
+    Tool : undefined
+    Asset : undefined
+  }
   this.mustache = {
     sourceGlob: '*.mustache'
     rename: { extname: ''}
@@ -100,10 +87,11 @@ ConfigObject = ()->
     ]
     external: []
     linkerArgs: []
-    sourceGlobs:[
-      path.resolve(this.dirSource, '**/*.cpp')
-      path.resolve(this.dirExternal, 'src', '**/*.cpp')
-    ]
+    sourceGlobs: []
+    # sourceGlobs:[
+    #   path.resolve(this.path.Source, '**/*.cpp')
+    #   path.resolve(this.path.External, 'src', '**/*.cpp')
+    # ]
     watchGlob: '{**/*.cpp,**/*.h,**/*.mustache}'
     assetGlob: '**/*@(.png|.ogg|.json|.as|.frag|.vert)'
   }
@@ -126,6 +114,39 @@ ConfigObject = ()->
 config = new ConfigObject
 
 Configure = (done)->
+  #defaults
+  config.path.Root = path.resolve process.cwd(), '..', '..'
+  config.path.Source = path.resolve config.path.Root, 'code'
+  config.path.GeneratedSourceOutput = path.resolve config.path.Source, 'mustached'
+  config.path.Download = path.resolve config.path.Root, 'external'
+  config.path.External = path.resolve config.path.Root, 'external', config.targetPlatform
+  config.path.BuildRoot = path.resolve config.path.Root, 'dev-build'
+  config.path.Cache = path.resolve config.path.BuildRoot, '.cache'
+  config.path.Output = path.resolve config.path.BuildRoot, config.targetPlatform
+  config.path.Obj = path.resolve config.path.BuildRoot, '.obj'
+  config.path.Tool = path.resolve config.path.Root, 'tool'
+  config.path.Asset = path.resolve config.path.Root, 'asset'
+
+  config.includeDirectories = [
+    '-I' + path.resolve config.path.External, 'include'
+    '-I' + path.resolve config.path.Source
+    '-I' + path.resolve config.path.GeneratedSourceOutput
+    '-I' + path.resolve config.path.Source,'angelscript'
+    '-I' + path.resolve config.path.Source,'component'
+    '-I/usr/local/include'
+    '-I/usr/include'
+  ]
+  config.linkerDirectories = [
+    '-L' + path.resolve config.path.External
+    '-L' + path.resolve config.path.External, 'lib'
+    '-L/usr/local/lib'
+    '-L/usr/lib'
+  ]
+  config.project.sourceGlobs = [
+    path.resolve config.path.Source, '**/*.cpp'
+    path.resolve config.path.External, 'src', '**/*.cpp'
+  ]
+
   if yargs.config == undefined
     yargs.config = 'example.cson'
   console.log 'Configuring from file: '+yargs.config
@@ -162,7 +183,7 @@ Download = (url,filepath)->
         reject('Bad URL:'+url)
     .on 'error', (err)->
       reject('Error connecting to url: '+err)
-    .pipe fs.createWriteStream path.resolve( config.dirDownload, filepath )
+    .pipe fs.createWriteStream path.resolve( config.path.Download, filepath )
       .on 'finish', ()->
         console.log 'Finished downloading to '+filepath
         resolve()
@@ -172,15 +193,15 @@ Download = (url,filepath)->
 box2d = ()->
   # return Download('https://codeload.github.com/erincatto/Box2D/tar.gz/v2.3.1','box2d.tar.gz')
   return (new Promise (resolve,reject) -> resolve())
-  .then ()-> return tar.extract {file:path.resolve(config.dirDownload,'box2d.tar.gz'),cwd:config.dirDownload }, (err, stdout, stderr) -> console.log 'tar extract done'
+  .then ()-> return tar.extract {file:path.resolve(config.path.Download,'box2d.tar.gz'),cwd:config.path.Download }, (err, stdout, stderr) -> console.log 'tar extract done'
   .then ()-> return new Promise (resolve,reject) ->
-    exec 'cmake -G "Unix Makefiles" -DBOX2D_INSTALL=OFF -DBOX2D_BUILD_SHARED=OFF -DBOX2D_BUILD_EXAMPLES=OFF ..', {cwd:path.resolve(config.dirDownload,'Box2D-2.3.1','Box2D','Build')}, (err, stdout, stderr) ->
+    exec 'cmake -G "Unix Makefiles" -DBOX2D_INSTALL=OFF -DBOX2D_BUILD_SHARED=OFF -DBOX2D_BUILD_EXAMPLES=OFF ..', {cwd:path.resolve(config.path.Download,'Box2D-2.3.1','Box2D','Build')}, (err, stdout, stderr) ->
       if err then reject( 'cmake failed: '+err ); return
-      exec 'cp -r Box2D '+path.resolve(config.dirExternal,'include'), {cwd:path.resolve(config.dirDownload,'Box2D-2.3.1','Box2D')}, (err, stdout, stderr) ->
+      exec 'cp -r Box2D '+path.resolve(config.path.External,'include'), {cwd:path.resolve(config.path.Download,'Box2D-2.3.1','Box2D')}, (err, stdout, stderr) ->
         if err then reject( 'cp failed: '+err ); return
-        exec 'make config="debug"', {cwd:path.resolve(config.dirDownload,'Box2D-2.3.1','Box2D','Build')}, (err, stdout, stderr) ->
+        exec 'make config="debug"', {cwd:path.resolve(config.path.Download,'Box2D-2.3.1','Box2D','Build')}, (err, stdout, stderr) ->
           if err then reject( 'make config failed: '+err ); return
-          exec 'cp libBox2D.a '+path.resolve(config.dirExternal,'lib'), {cwd:path.resolve(config.dirDownload,'Box2D-2.3.1','Box2D','Build','Box2D')}, (err, stdout, stderr) ->
+          exec 'cp libBox2D.a '+path.resolve(config.path.External,'lib'), {cwd:path.resolve(config.path.Download,'Box2D-2.3.1','Box2D','Build','Box2D')}, (err, stdout, stderr) ->
             if err then reject( 'cp failed: '+err ); return
             resolve()
   .catch (reason)-> console.error reason
@@ -188,10 +209,10 @@ box2d = ()->
 sdl_build = ()->
   SDL='SDL-2.0.4-10002'
   # return Download('https://www.libsdl.org/tmp/'+SDL+'.tar.gz',SDL+'.tar.gz')
-  # .then ()-> return tar.extract {file:path.resolve(config.dirDownload,SDL+'.tar.gz'),cwd:config.dirDownload }, (err, stdout, stderr) -> console.log 'tar extract done'
+  # .then ()-> return tar.extract {file:path.resolve(config.path.Download,SDL+'.tar.gz'),cwd:config.path.Download }, (err, stdout, stderr) -> console.log 'tar extract done'
   return new Promise (resolve,reject) ->
   # .then ()-> return new Promise (resolve,reject) ->
-    buildDir = path.resolve(config.dirDownload,SDL,'build-'+config.targetPlatform)
+    buildDir = path.resolve(config.path.Download,SDL,'build-'+config.targetPlatform)
     fs.mkdir buildDir, (err)->
       #if err then reject(err); return
       switch config.targetPlatform
@@ -247,52 +268,52 @@ Setup = ()->
   .then gulp.series ray
 
 Clean = (done)->
-  if fs.existsSync config.dirObj
-    rmdirSync config.dirObj
-  if fs.existsSync config.dirCache
-    rmdirSync config.dirCache
-  fs.unlink path.resolve(config.dirOutput, config.project.outputExecutableName), ->{}
+  if fs.existsSync config.path.Obj
+    rmdirSync config.path.Obj
+  if fs.existsSync config.path.Cache
+    rmdirSync config.path.Cache
+  fs.unlink path.resolve(config.path.Output, config.project.outputExecutableName), ->{}
   if config.targetPlatform=='darwin'
-    fs.stat path.resolve(config.dirOutput, config.project.outputExecutableName+'.dSYM'), (err,stats)->
-      fs.unlink path.resolve(config.dirOutput, config.project.outputExecutableName+'.dSYM'), (err)->
+    fs.stat path.resolve(config.path.Output, config.project.outputExecutableName+'.dSYM'), (err,stats)->
+      fs.unlink path.resolve(config.path.Output, config.project.outputExecutableName+'.dSYM'), (err)->
         done()
   else done()
 
 Assets = (done)->
-  return gulp.src config.project.assetGlob, {cwd:path.resolve(config.dirAsset), ignoreInitial:false }
+  return gulp.src config.project.assetGlob, {cwd:path.resolve(config.path.Asset), ignoreInitial:false }
   .pipe cache 'assets'
   .pipe print( (filepath)=> return 'Asset copied: '+filepath )
-  .pipe gulp.dest( config.dirOutput )
+  .pipe gulp.dest( config.path.Output )
   .on 'finish', ()-> done()
 
 CSON = (done)->
-  return gulp.src '**/*.cson', {cwd:path.resolve(config.dirAsset), ignoreInitial:false }
+  return gulp.src '**/*.cson', {cwd:path.resolve(config.path.Asset), ignoreInitial:false }
   .pipe cache 'cson'
   .pipe gulpcson()
   .pipe print( (filepath)=> return 'CSON=>JSON: '+filepath )
-  .pipe gulp.dest( config.dirOutput )
+  .pipe gulp.dest( config.path.Output )
   .on 'finish', ()-> done()
 
 Mustache = (done)->
-  return gulp.src config.mustache.sourceGlob, {cwd:path.resolve(config.dirSource), ignoreInitial:false }
+  return gulp.src config.mustache.sourceGlob, {cwd:path.resolve(config.path.Source), ignoreInitial:false }
   .pipe cache 'mustache'
   .pipe mustache( config.mustache.context )
   .pipe rename( config.mustache.rename )
   .pipe print (filepath)=> return 'Mustaching: '+filepath
-  .pipe gulp.dest( config.dirGeneratedSourceOutput )
+  .pipe gulp.dest( config.path.GeneratedSourceOutput )
   .on 'finish', ()-> done()
 
 watcher = (done)->
   gulp.watch config.mustache.sourceGlob, Mustache
-  gulp.watch path.resolve( config.dirAsset, '**/*.cson'), CSON
+  gulp.watch path.resolve( config.path.Asset, '**/*.cson'), CSON
   gulp.watch config.project.assetGlob, Mustache
 
 CompileAll = ()->
   return new Promise (resolve, reject)->
-    if fs.existsSync(config.dirObj) == false
-      mkdirSync config.dirObj
-    sourceFiles = glob.sync path.resolve(config.dirSource,config.project.sourceGlob)
-    externalSourceFiles = glob.sync path.resolve(config.dirExternal,'src', config.project.sourceGlob)
+    if fs.existsSync(config.path.Obj) == false
+      mkdirSync config.path.Obj
+    sourceFiles = glob.sync path.resolve(config.path.Source,config.project.sourceGlob)
+    externalSourceFiles = glob.sync path.resolve(config.path.External,'src', config.project.sourceGlob)
     sourceFiles.push externalSourceFiles.join(' ')
     comp = [] #['-g','-x c++','-std=c++11']
     comp.push config.project.compilerDefines.join(' ')
@@ -302,17 +323,17 @@ CompileAll = ()->
     for f in sourceFiles
       console.log 'sourcefile: '+f
       relpath = ''
-      if f.indexOf(config.dirSource)>=0
-        relpath = path.relative config.dirSource, f
-      if f.indexOf(config.dirExternal)>=0
-        relpath = path.relative config.dirExternal, f
+      if f.indexOf(config.path.Source)>=0
+        relpath = path.relative config.path.Source, f
+      if f.indexOf(config.path.External)>=0
+        relpath = path.relative config.path.External, f
       if relpath.length == 0
         count--;
         continue
-      dir = path.dirname( path.resolve(config.dirObj, relpath ))
+      dir = path.dirname( path.resolve(config.path.Obj, relpath ))
       if fs.existsSync( dir)== false
         mkdirSync dir
-      finalPath = path.resolve( config.dirObj, path.dirname(relpath), path.basename(relpath,'.cpp')+'.o')
+      finalPath = path.resolve( config.path.Obj, path.dirname(relpath), path.basename(relpath,'.cpp')+'.o')
       console.log 'finalPath: '+finalPath
 
       command = 'clang++ -g -c -o '+finalPath+' '+f+' '+comp.join(' ')
@@ -337,7 +358,7 @@ CompileAll = ()->
 
 
 PrimeCache = ()->
-  sourceGlobs = [ path.resolve(config.dirSource,config.project.sourceGlob), path.resolve(config.dirExternal,'src', config.project.sourceGlob) ]
+  sourceGlobs = [ path.resolve(config.path.Source,config.project.sourceGlob), path.resolve(config.path.External,'src', config.project.sourceGlob) ]
   return gulp.src sourceGlobs
   .pipe rename { extname:'.cache' }
   .pipe cache 'source'
@@ -350,11 +371,11 @@ CompileIncremental = (done)->
   return gulp.src config.project.sourceGlobs
   .pipe cache 'source' #, {optimizeMemory:true}
   .pipe print (filepath)-> return 'changed: '+filepath
-  # .pipe gulp.dest config.dirCache #no reason to write out the cache without a read somewhere
+  # .pipe gulp.dest config.path.Cache #no reason to write out the cache without a read somewhere
   .pipe run( command, {silent:true})
   .pipe rename { extname: '.o'}
   .pipe print (filepath)-> return 'compiled: '+filepath
-  .pipe gulp.dest config.dirObj
+  .pipe gulp.dest config.path.Obj
 
 Link = (done)->
   link = []
@@ -363,22 +384,22 @@ Link = (done)->
   link.push '-Wl,' + linkerArgs.join(',')
   if config.targetPlatform == 'darwin'
     link.push config.project.frameworks.join(' ')
-  objectFiles = glob.sync config.dirObj+'/**/*.o'
-  linkCommand = ['clang++ -g', objectFiles.join(' '), link.join(' '),  '-o', path.resolve( config.dirOutput, config.project.outputExecutableName) ].join(' ')
+  objectFiles = glob.sync config.path.Obj+'/**/*.o'
+  linkCommand = ['clang++ -g', objectFiles.join(' '), link.join(' '),  '-o', path.resolve( config.path.Output, config.project.outputExecutableName) ].join(' ')
   # console.log linkCommand
   exec linkCommand, (err, stdout, stderr) ->
     console.log stdout
     console.log stderr
     if err then console.error 'LINK ERROR: '+err
     else if config.targetPlatform == 'darwin'
-      exec 'dsymutil -o '+path.resolve(config.dirOutput, config.project.outputExecutableName)+'.dSYM '+path.resolve(config.dirOutput, config.project.outputExecutableName),
+      exec 'dsymutil -o '+path.resolve(config.path.Output, config.project.outputExecutableName)+'.dSYM '+path.resolve(config.path.Output, config.project.outputExecutableName),
       {maxBuffer: 1024 * 1024},
       (err, stdout, stderr) ->
         if err then console.error err
     done()
 
 Launch = (done)->
-  app = spawn path.resolve(config.dirOutput, config.project.outputExecutableName), [], {stdio:'inherit'}
+  app = spawn path.resolve(config.path.Output, config.project.outputExecutableName), [], {stdio:'inherit'}
   app.on 'close', (code) ->
     console.log 'child process exited with code '+code
     done()
