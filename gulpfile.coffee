@@ -40,7 +40,7 @@ mkdirSync = (dir) ->
     try
       fs.mkdirSync currentPath
     catch
-      console.log 'exists: '+currentPath
+      # console.log 'exists: '+currentPath
 
 rmdirSync = (dirPath)->
   try
@@ -87,13 +87,13 @@ ConfigObject = ()->
     ]
     external: []
     linkerArgs: []
-    sourceGlobs: []
-    # sourceGlobs:[
-    #   path.resolve(this.path.Source, '**/*.cpp')
-    #   path.resolve(this.path.External, 'src', '**/*.cpp')
-    # ]
+    sourceGlob: '**/*.cpp'
     watchGlob: '{**/*.cpp,**/*.h,**/*.mustache}'
     assetGlob: '**/*@(.png|.ogg|.json|.as|.frag|.vert)'
+    sourceGlobs: []
+    path: {
+      default:undefined
+    }
   }
   # anything in the active target.[platform] object is merged into this.project
   this.target = {
@@ -111,9 +111,10 @@ ConfigObject = ()->
   }
   return this # be sure to return an object
 
-config = new ConfigObject
+config = undefined
 
 Configure = (done)->
+  config =  new ConfigObject
   #defaults
   config.path.Root = path.resolve process.cwd(), '..', '..'
   config.path.Source = path.resolve config.path.Root, 'code'
@@ -142,10 +143,12 @@ Configure = (done)->
     '-L/usr/local/lib'
     '-L/usr/lib'
   ]
-  config.project.sourceGlobs = [
-    path.resolve config.path.Source, '**/*.cpp'
-    path.resolve config.path.External, 'src', '**/*.cpp'
-  ]
+  ## add default source paths
+  config.project.path.enginesource = config.path.Source
+  config.project.path.external = path.resolve(config.path.External,'src')
+
+  # keep roots for .o file paths
+  config.project.pathroots = []
 
   if yargs.config == undefined
     yargs.config = 'example.cson'
@@ -157,18 +160,34 @@ Configure = (done)->
   rs.on 'end', ->
     obj = cson.parse buffer
     config = merge config, obj
+
     target = undefined
     switch config.targetPlatform
       when 'linux' then target = config.target.linux; break
       when 'darwin' then target = config.target.darwin; break
       else console.log( 'platform '+ config.targetPlatform +'not supported by build script!')
     config.project = merge config.project, target
-    # add lowercase names to mustahce component list
+
+    # add lowercase names to mustache component list
     for component in config.mustache.context.Components
       component['lowerName'] = component.type.toLowerCase()
-    # console.log config
+
+    for k,v of config.project.path
+      console.log 'PATH: '+k+' '+v
+      if k != 'root'
+        if v?
+          if path.isAbsolute v
+            config.project.sourceGlobs.push path.resolve( v, config.project.sourceGlob )
+            config.project.pathroots.push v
+          else
+            console.log 'relative: '+v
+            config.project.sourceGlobs.push path.resolve( config.project.path.root, v, config.project.sourceGlob )
+            config.project.pathroots.push path.resolve( config.project.path.root, v)
+
+    console.log config
     console.log 'Configured for platform: ' + config.targetPlatform
     done()
+
 
 Start = (done)->
   gulp.repl = repl.start gulp
@@ -312,21 +331,23 @@ CompileAll = ()->
   return new Promise (resolve, reject)->
     if fs.existsSync(config.path.Obj) == false
       mkdirSync config.path.Obj
-    sourceFiles = glob.sync path.resolve(config.path.Source,config.project.sourceGlob)
-    externalSourceFiles = glob.sync path.resolve(config.path.External,'src', config.project.sourceGlob)
-    sourceFiles.push externalSourceFiles.join(' ')
+    sourceFiles = []
+    for sf in config.project.sourceGlobs
+      sourceFiles = sourceFiles.concat glob.sync(sf)
+    console.log 'SOURCEFILES:'
+    console.log sourceFiles
     comp = [] #['-g','-x c++','-std=c++11']
     comp.push config.project.compilerDefines.join(' ')
     comp.push config.includeDirectories.join(' ')
     total = sourceFiles.length
     count = total
     for f in sourceFiles
-      console.log 'sourcefile: '+f
-      relpath = ''
-      if f.indexOf(config.path.Source)>=0
-        relpath = path.relative config.path.Source, f
-      if f.indexOf(config.path.External)>=0
-        relpath = path.relative config.path.External, f
+      # console.log 'sourcefile: '+f
+      relpath = f
+      for k,v of config.project.pathroots
+        if f.indexOf(v)>=0
+          relpath = path.relative v, f
+          break
       if relpath.length == 0
         count--;
         continue
@@ -334,8 +355,7 @@ CompileAll = ()->
       if fs.existsSync( dir)== false
         mkdirSync dir
       finalPath = path.resolve( config.path.Obj, path.dirname(relpath), path.basename(relpath,'.cpp')+'.o')
-      console.log 'finalPath: '+finalPath
-
+      # console.log 'finalPath: '+finalPath
       command = 'clang++ -g -c -o '+finalPath+' '+f+' '+comp.join(' ')
       exec command, {maxBuffer: 1024 * 1024}, (err, stdout, stderr) ->
         if stdout.length > 0
@@ -358,9 +378,8 @@ CompileAll = ()->
 
 
 PrimeCache = ()->
-  sourceGlobs = [ path.resolve(config.path.Source,config.project.sourceGlob), path.resolve(config.path.External,'src', config.project.sourceGlob) ]
-  return gulp.src sourceGlobs
-  .pipe rename { extname:'.cache' }
+  return gulp.src config.project.sourceGlobs
+  # .pipe rename { extname:'.cache' }
   .pipe cache 'source'
 
 CompileIncremental = (done)->
