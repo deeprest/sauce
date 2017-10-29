@@ -1,5 +1,12 @@
 # Sauce
-Node-based general purpose local development tool for indie game developers. Functions as a build tool, asset processor, source preprocessor, script bindings generator and library builder. It will eventually be a build server, deployment tool and more.  Linux/MacOS supported. Contributions for Windows.
+Nodejs-based local development tool for a C++ game project. Linux and MacOS supported.
+
+Features:
+* build tool
+* asset processor
+* source preprocessor
+* script bindings generator
+* library updater/builder. 
 
 #### What it does
 * [Gulp](https://gulpjs.com/) for task management
