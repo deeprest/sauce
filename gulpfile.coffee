@@ -57,22 +57,24 @@ rmdirSync = (dirPath)->
   return fs.rmdirSync dirPath
 
 
+Path = ()->
+  Root : undefined
+  Source : undefined
+  GeneratedSourceOutput : undefined
+  Download : undefined
+  External : undefined
+  BuildRoot : undefined
+  Cache : undefined
+  Output : undefined
+  Obj : undefined
+  Tool : undefined
+  Asset : undefined
+
+
 ConfigObject = ()->
   this.devPlatform = os.platform()
   this.targetPlatform = this.devPlatform
-  this.path = {
-    Root : undefined
-    Source : undefined
-    GeneratedSourceOutput : undefined
-    Download : undefined
-    External : undefined
-    BuildRoot : undefined
-    Cache : undefined
-    Output : undefined
-    Obj : undefined
-    Tool : undefined
-    Asset : undefined
-  }
+  this.path = new Path
   this.mustache = {
     sourceGlob: '*.mustache'
     rename: { extname: ''}
@@ -91,9 +93,7 @@ ConfigObject = ()->
     watchGlob: '{**/*.cpp,**/*.h,**/*.mustache}'
     assetGlob: '**/*@(.png|.ogg|.json|.as|.frag|.vert)'
     sourceGlobs: []
-    path: {
-      default:undefined
-    }
+    path: new Path
   }
   # anything in the active target.[platform] object is merged into this.project
   this.target = {
@@ -114,7 +114,11 @@ ConfigObject = ()->
 config = undefined
 
 Configure = (done)->
-  config =  new ConfigObject
+  config = new ConfigObject
+  if yargs.config == undefined
+    yargs.config = 'example.cson'
+  console.log 'Configuring from file: '+yargs.config
+
   #defaults
   config.path.Root = path.resolve process.cwd(), '..', '..'
   config.path.Source = path.resolve config.path.Root, 'code'
@@ -127,6 +131,9 @@ Configure = (done)->
   config.path.Obj = path.resolve config.path.BuildRoot, '.obj'
   config.path.Tool = path.resolve config.path.Root, 'tool'
   config.path.Asset = path.resolve config.path.Root, 'asset'
+
+  for k,v of config.path
+    console.log 'TEST:'+config.path[k]
 
   config.includeDirectories = [
     '-I' + path.resolve config.path.External, 'include'
@@ -147,12 +154,8 @@ Configure = (done)->
   config.project.path.enginesource = config.path.Source
   config.project.path.external = path.resolve(config.path.External,'src')
 
-  # keep roots for .o file paths
-  config.project.pathroots = []
 
-  if yargs.config == undefined
-    yargs.config = 'example.cson'
-  console.log 'Configuring from file: '+yargs.config
+  # read build.cson
   buffer = ''
   rs = fs.createReadStream yargs.config, {flags:'r',encoding:'utf8'}
   rs.on 'error', (err)->  console.log 'error: '+err
@@ -160,18 +163,21 @@ Configure = (done)->
   rs.on 'end', ->
     obj = cson.parse buffer
     config = merge config, obj
-
     target = undefined
     switch config.targetPlatform
       when 'linux' then target = config.target.linux; break
       when 'darwin' then target = config.target.darwin; break
       else console.log( 'platform '+ config.targetPlatform +'not supported by build script!')
+
     config.project = merge config.project, target
 
     # add lowercase names to mustache component list
     for component in config.mustache.context.Components
       component['lowerName'] = component.type.toLowerCase()
 
+    # keep roots for .o file paths
+    config.project.pathroots = []
+    # assign pathroots for .o files in compiled object dir
     for k,v of config.project.path
       console.log 'PATH: '+k+' '+v
       if k != 'root'
@@ -325,7 +331,7 @@ Mustache = (done)->
 watcher = (done)->
   gulp.watch config.mustache.sourceGlob, Mustache
   gulp.watch path.resolve( config.path.Asset, '**/*.cson'), CSON
-  gulp.watch config.project.assetGlob, Mustache
+  gulp.watch path.resolve( config.path.Asset, config.project.assetGlob ), Assets
 
 CompileAll = ()->
   return new Promise (resolve, reject)->
@@ -398,7 +404,7 @@ CompileIncremental = (done)->
 
 Link = (done)->
   link = []
-  linkerArgs = config.project.linkerArgs
+  linkerArgs = config.project.linkerArgs.slice()
   linkerArgs.push config.linkerDirectories
   link.push '-Wl,' + linkerArgs.join(',')
   if config.targetPlatform == 'darwin'
@@ -418,7 +424,7 @@ Link = (done)->
     done()
 
 Launch = (done)->
-  app = spawn path.resolve(config.path.Output, config.project.outputExecutableName), [], {stdio:'inherit'}
+  app = spawn path.resolve(config.path.Output, config.project.outputExecutableName), [], {cwd:config.path.Output, stdio:'inherit'}
   app.on 'close', (code) ->
     console.log 'child process exited with code '+code
     done()
