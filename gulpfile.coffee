@@ -324,12 +324,12 @@ Mustache = (done)->
   .pipe cache 'mustache'
   .pipe mustache( config.mustache.context )
   .pipe rename( config.mustache.rename )
-  .pipe print (filepath)=> return 'Mustaching: '+filepath
+  .pipe print( (filepath)=> return 'Mustaching: '+filepath )
   .pipe gulp.dest( config.path.GeneratedSourceOutput )
   .on 'finish', ()-> done()
 
 watcher = (done)->
-  gulp.watch config.mustache.sourceGlob, Mustache
+  gulp.watch path.resolve( config.path.Source, config.mustache.sourceGlob ), Mustache
   gulp.watch path.resolve( config.path.Asset, '**/*.cson'), CSON
   gulp.watch path.resolve( config.path.Asset, config.project.assetGlob ), Assets
 
