@@ -76,8 +76,8 @@ ConfigObject = ()->
   this.targetPlatform = this.devPlatform
   this.path = new Path
   this.mustache = {
-    sourceGlob: '*.mustache'
-    rename: { extname: ''}
+    sourceGlob: '*.template'
+    rename: { extname: '' }
     context: { Components: [] }
   }
   this.project = {
