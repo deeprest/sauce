@@ -1,0 +1,65 @@
+path:
+  Root:'/Users/zero/project/spaghetti'
+outputExecutableName: 'demo'
+compilerDefines: [
+  '-DCONFIG_DEBUG'
+  '-DGL_GLEXT_PROTOTYPES'
+  '-DSPAG_PHYSFS'
+  #'-fno-rtti'
+  '-ferror-limit=2'
+]
+linkerArgs: [
+  '-lstdc++'
+  '-lm'
+  '-lpthread'
+  '-lSDL2main'
+  '-lSDL2'
+  '-lSDL2_image'
+  '-langelscript'
+  '-lphysfs'
+  '-lBox2D'
+  # '-lBullet3Common_gmake_x64_release'
+  # '-lBullet3Collision_gmake_x64_release'
+  # '-lBullet3Dynamics_gmake_x64_release'
+  # '-lBullet3Geometry_gmake_x64_release'
+]
+external: [
+  #'sdl-build'
+  # 'sdl'
+  # 'box2d'
+  # 'angelscript'
+]
+sourceGlob: '**/*.cpp'
+watchGlob: '{**/*.cpp,**/*.h,**/*.mustache}'
+assetGlob: '**/*@(.png|.ogg|.json|.as|.vert|.frag)'
+target:
+  linux:
+    external: []
+    linkerArgs: [ '-lGL' ]
+  darwin:{
+    linkerArgs: [ '-liconv' ]
+    frameworks: [
+      '-framework CoreVideo'
+      '-framework GLKit'
+      '-framework OpenGL'
+      '-framework IOKit' # physfs
+      '-framework Carbon' # physfs
+      # '-framework CoreAudio'
+      # '-framework AudioToolbox'
+      # '-framework AudioUnit'
+    ]
+  }
+mustache:
+  sourceGlob: ['*.template']
+  rename: { extname: '' }
+  context:
+    Components: [
+      {type:'Transform'}
+      {type:'Camera'}
+      {type:'Mesh'}
+      {type:'MeshView'}
+      {type:'Rigidbody'}
+      {type:'Joint'}
+      {type:'Input'}
+      {type:'Logic'}
+    ]

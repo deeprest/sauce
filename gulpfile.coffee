@@ -75,26 +75,18 @@ ConfigObject = ()->
   this.devPlatform = os.platform()
   this.targetPlatform = this.devPlatform
   this.path = new Path
-  this.mustache = {
-    sourceGlob: '*.template'
-    rename: { extname: '' }
-    context: { Components: [] }
-  }
-  this.project = {
-    outputExecutableName: 'default'
-    compilerDefines: [
-      '-g'
-      '-x c++'
-      '-std=c++11'
-    ]
-    external: []
-    linkerArgs: []
-    sourceGlob: '**/*.cpp'
-    watchGlob: '{**/*.cpp,**/*.h,**/*.mustache}'
-    assetGlob: '**/*@(.png|.ogg|.json|.as|.frag|.vert)'
-    sourceGlobs: []
-    path: new Path
-  }
+  this.outputExecutableName = 'default'
+  this.compilerDefines = [
+    '-g'
+    '-x c++'
+    '-std=c++11'
+  ]
+  this.external = []
+  this.linkerArgs = []
+  this.sourceGlob = '**/*.cpp'
+  this.watchGlob = '{**/*.cpp,**/*.h,**/*.mustache}'
+  this.assetGlob = '**/*@(.png|.ogg|.json|.as|.frag|.vert)'
+  this.sourceGlobs = []
   # anything in the active target.[platform] object is merged into this.project
   this.target = {
     linux: {
@@ -109,6 +101,11 @@ ConfigObject = ()->
       frameworks:[]
     }
   }
+  this.mustache = {
+    sourceGlob: '*.template'
+    rename: { extname: '' }
+    context: { Components: [] }
+  }
   return this # be sure to return an object
 
 config = undefined
@@ -118,9 +115,12 @@ Configure = (done)->
   if yargs.config == undefined
     yargs.config = 'example.cson'
   console.log 'Configuring from file: '+yargs.config
+  # read build.cson
+  buffer = fs.readFileSync yargs.config, {flags:'r',encoding:'utf8'}
+  configFile = cson.parse buffer
 
-  #defaults
-  config.path.Root = path.resolve process.cwd(), '..', '..'
+  # set defaults based on config file Root path
+  config.path.Root = configFile.path.Root
   config.path.Source = path.resolve config.path.Root, 'code'
   config.path.GeneratedSourceOutput = path.resolve config.path.Source, 'mustached'
   config.path.Download = path.resolve config.path.Root, 'external'
@@ -131,9 +131,6 @@ Configure = (done)->
   config.path.Obj = path.resolve config.path.BuildRoot, '.obj'
   config.path.Tool = path.resolve config.path.Root, 'tool'
   config.path.Asset = path.resolve config.path.Root, 'asset'
-
-  for k,v of config.path
-    console.log 'TEST:'+config.path[k]
 
   config.includeDirectories = [
     '-I' + path.resolve config.path.External, 'include'
@@ -150,49 +147,43 @@ Configure = (done)->
     '-L/usr/local/lib'
     '-L/usr/lib'
   ]
-  ## add default source paths
-  config.project.path.enginesource = config.path.Source
-  config.project.path.external = path.resolve(config.path.External,'src')
 
+  # overwrite the default config values
+  config = merge config, configFile
 
-  # read build.cson
-  buffer = ''
-  rs = fs.createReadStream yargs.config, {flags:'r',encoding:'utf8'}
-  rs.on 'error', (err)->  console.log 'error: '+err
-  rs.on 'data', (chunk) ->  buffer += chunk
-  rs.on 'end', ->
-    obj = cson.parse buffer
-    config = merge config, obj
-    target = undefined
-    switch config.targetPlatform
-      when 'linux' then target = config.target.linux; break
-      when 'darwin' then target = config.target.darwin; break
-      else console.log( 'platform '+ config.targetPlatform +'not supported by build script!')
+  # merge target specific values
+  target = undefined
+  switch config.targetPlatform
+    when 'linux' then target = config.target.linux; break
+    when 'darwin' then target = config.target.darwin; break
+    else console.log( 'platform '+ config.targetPlatform +'not supported by build script!')
+  config = merge config, target
 
-    config.project = merge config.project, target
+  # add lowercase names to mustache component list
+  for component in config.mustache.context.Components
+    component['lowerName'] = component.type.toLowerCase()
 
-    # add lowercase names to mustache component list
-    for component in config.mustache.context.Components
-      component['lowerName'] = component.type.toLowerCase()
+  config.sourceGlobs.push path.resolve( config.path.Source, config.sourceGlob )
+  #config.sourceGlobs.push path.resolve( config.path.External, config.sourceGlob )
 
-    # keep roots for .o file paths
-    config.project.pathroots = []
-    # assign pathroots for .o files in compiled object dir
-    for k,v of config.project.path
-      console.log 'PATH: '+k+' '+v
-      if k != 'root'
-        if v?
-          if path.isAbsolute v
-            config.project.sourceGlobs.push path.resolve( v, config.project.sourceGlob )
-            config.project.pathroots.push v
-          else
-            console.log 'relative: '+v
-            config.project.sourceGlobs.push path.resolve( config.project.path.root, v, config.project.sourceGlob )
-            config.project.pathroots.push path.resolve( config.project.path.root, v)
+  # keep roots for .o file paths
+  config.pathroots = []
+  # assign pathroots for .o files in compiled object dir
+  for k,v of config.path
+    console.log 'PATH: '+k+' '+v
+    if k != 'root'
+      if v?
+        if path.isAbsolute v
+          # config.sourceGlobs.push path.resolve( v, config.sourceGlob )
+          config.pathroots.push v
+        else
+          console.log 'relative: '+v
+          # config.sourceGlobs.push path.resolve( config.path.root, v, config.sourceGlob )
+          config.pathroots.push path.resolve( config.path.root, v)
 
-    console.log config
-    console.log 'Configured for platform: ' + config.targetPlatform
-    done()
+  console.log config
+  console.log 'Configured for platform: ' + config.targetPlatform
+  done()
 
 
 Start = (done)->
@@ -277,7 +268,7 @@ angelscript = ()->
 Setup = ()->
   ray = []
   return new Promise (resolve, reject)->
-    for ekey,evalue of config.project.external
+    for ekey,evalue of config.external
       console.log evalue
       switch evalue
         when 'sdl' then ray.push sdl; break
@@ -297,15 +288,15 @@ Clean = (done)->
     rmdirSync config.path.Obj
   if fs.existsSync config.path.Cache
     rmdirSync config.path.Cache
-  fs.unlink path.resolve(config.path.Output, config.project.outputExecutableName), ->{}
+  fs.unlink path.resolve(config.path.Output, config.outputExecutableName), ->{}
   if config.targetPlatform=='darwin'
-    fs.stat path.resolve(config.path.Output, config.project.outputExecutableName+'.dSYM'), (err,stats)->
-      fs.unlink path.resolve(config.path.Output, config.project.outputExecutableName+'.dSYM'), (err)->
+    fs.stat path.resolve(config.path.Output, config.outputExecutableName+'.dSYM'), (err,stats)->
+      fs.unlink path.resolve(config.path.Output, config.outputExecutableName+'.dSYM'), (err)->
         done()
   else done()
 
 Assets = (done)->
-  return gulp.src config.project.assetGlob, {cwd:path.resolve(config.path.Asset), ignoreInitial:false }
+  return gulp.src config.assetGlob, {cwd:path.resolve(config.path.Asset), ignoreInitial:false }
   .pipe cache 'assets'
   .pipe print( (filepath)=> return 'Asset copied: '+filepath )
   .pipe gulp.dest( config.path.Output )
@@ -331,26 +322,27 @@ Mustache = (done)->
 watcher = (done)->
   gulp.watch path.resolve( config.path.Source, config.mustache.sourceGlob ), Mustache
   gulp.watch path.resolve( config.path.Asset, '**/*.cson'), CSON
-  gulp.watch path.resolve( config.path.Asset, config.project.assetGlob ), Assets
+  gulp.watch path.resolve( config.path.Asset, config.assetGlob ), Assets
 
 CompileAll = ()->
   return new Promise (resolve, reject)->
     if fs.existsSync(config.path.Obj) == false
       mkdirSync config.path.Obj
     sourceFiles = []
-    for sf in config.project.sourceGlobs
+    for sf in config.sourceGlobs
       sourceFiles = sourceFiles.concat glob.sync(sf)
     console.log 'SOURCEFILES:'
     console.log sourceFiles
+
     comp = [] #['-g','-x c++','-std=c++11']
-    comp.push config.project.compilerDefines.join(' ')
+    comp.push config.compilerDefines.join(' ')
     comp.push config.includeDirectories.join(' ')
     total = sourceFiles.length
     count = total
     for f in sourceFiles
       # console.log 'sourcefile: '+f
       relpath = f
-      for k,v of config.project.pathroots
+      for k,v of config.pathroots
         if f.indexOf(v)>=0
           relpath = path.relative v, f
           break
@@ -384,16 +376,16 @@ CompileAll = ()->
 
 
 PrimeCache = ()->
-  return gulp.src config.project.sourceGlobs
+  return gulp.src config.sourceGlobs
   # .pipe rename { extname:'.cache' }
   .pipe cache 'source'
 
 CompileIncremental = (done)->
   comp = [] #['-g','-x c++','-std=c++11']
-  comp.push config.project.compilerDefines.join(' ')
+  comp.push config.compilerDefines.join(' ')
   comp.push config.includeDirectories.join(' ')
   command = 'clang++ -x c++ -g -c - -o - '+comp.join(' ')
-  return gulp.src config.project.sourceGlobs
+  return gulp.src config.sourceGlobs
   .pipe cache 'source' #, {optimizeMemory:true}
   .pipe print (filepath)-> return 'changed: '+filepath
   # .pipe gulp.dest config.path.Cache #no reason to write out the cache without a read somewhere
@@ -404,27 +396,27 @@ CompileIncremental = (done)->
 
 Link = (done)->
   link = []
-  linkerArgs = config.project.linkerArgs.slice()
+  linkerArgs = config.linkerArgs.slice()
   linkerArgs.push config.linkerDirectories
   link.push '-Wl,' + linkerArgs.join(',')
   if config.targetPlatform == 'darwin'
-    link.push config.project.frameworks.join(' ')
+    link.push config.frameworks.join(' ')
   objectFiles = glob.sync config.path.Obj+'/**/*.o'
-  linkCommand = ['clang++ -g', objectFiles.join(' '), link.join(' '),  '-o', path.resolve( config.path.Output, config.project.outputExecutableName) ].join(' ')
+  linkCommand = ['clang++ -g', objectFiles.join(' '), link.join(' '),  '-o', path.resolve( config.path.Output, config.outputExecutableName) ].join(' ')
   # console.log linkCommand
   exec linkCommand, (err, stdout, stderr) ->
     console.log stdout
     console.log stderr
     if err then console.error 'LINK ERROR: '+err
     else if config.targetPlatform == 'darwin'
-      exec 'dsymutil -o '+path.resolve(config.path.Output, config.project.outputExecutableName)+'.dSYM '+path.resolve(config.path.Output, config.project.outputExecutableName),
+      exec 'dsymutil -o '+path.resolve(config.path.Output, config.outputExecutableName)+'.dSYM '+path.resolve(config.path.Output, config.outputExecutableName),
       {maxBuffer: 1024 * 1024},
       (err, stdout, stderr) ->
         if err then console.error err
     done()
 
 Launch = (done)->
-  app = spawn path.resolve(config.path.Output, config.project.outputExecutableName), [], {cwd:config.path.Output, stdio:'inherit'}
+  app = spawn path.resolve(config.path.Output, config.outputExecutableName), [], {cwd:config.path.Output, stdio:'inherit'}
   app.on 'close', (code) ->
     console.log 'child process exited with code '+code
     done()
@@ -432,7 +424,7 @@ Launch = (done)->
 Prebuild = gulp.parallel Mustache, CSON, Assets
 Build = gulp.series Prebuild, CompileAll, Link
 
-gulp.task 'default', gulp.series Configure, Start, watcher
+gulp.task 'default', gulp.series Configure, Start #, watcher
 gulp.task 'config', Configure
 gulp.task 'setup', Setup
 gulp.task 'watch', watcher
