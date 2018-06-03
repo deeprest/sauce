@@ -9,8 +9,9 @@
   "dependencies": {
     "cbor": "^3.0.3",
     "cson": "^4.1.0",
+    "decompress": "^4.2.0",
     "deepmerge": "^1.5.1",
-    "fs-extra": "^4.0.1",
+    "fs-extra": "^4.0.3",
     "gulp": "git+https:gulpjs@github.com/gulpjs/gulp.git#4.0",
     "gulp-cached": "^1.1.1",
     "gulp-changed": "^3.1.0",

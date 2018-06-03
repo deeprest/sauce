@@ -1,6 +1,6 @@
 os = require 'os'
 path = require 'path'
-fs = require 'fs'
+fs = require 'fs-extra'
 exec = (require 'child_process').exec
 spawn = (require 'child_process').spawn
 
@@ -15,7 +15,6 @@ changed = require 'gulp-changed'
 newer = require 'gulp-newer'
 cache = require 'gulp-cached'
 remember = require 'gulp-remember'
-
 run = require 'gulp-run'
 sourcemaps = require 'gulp-sourcemaps'
 
@@ -27,6 +26,8 @@ glob = require 'glob'
 merge = require 'deepmerge'
 request = require 'request'
 tar = require 'tar'
+decompress = require 'decompress'
+
 
 external = require './external.js'
 
@@ -108,7 +109,7 @@ ConfigObject = ()->
   }
   return this # be sure to return an object
 
-config = undefined
+config = null
 
 Configure = (done)->
   config = new ConfigObject
@@ -123,7 +124,7 @@ Configure = (done)->
   config.path.Root = configFile.path.Root
   config.path.Source = path.resolve config.path.Root, 'code'
   config.path.GeneratedSourceOutput = path.resolve config.path.Source, 'mustached'
-  config.path.Download = path.resolve config.path.Root, 'external'
+  config.path.Download = path.resolve config.path.Root, 'external', 'download'
   config.path.External = path.resolve config.path.Root, 'external', config.targetPlatform
   config.path.BuildRoot = path.resolve config.path.Root, 'dev-build'
   config.path.Cache = path.resolve config.path.BuildRoot, '.cache'
@@ -133,19 +134,19 @@ Configure = (done)->
   config.path.Asset = path.resolve config.path.Root, 'asset'
 
   config.includeDirectories = [
-    '-I' + path.resolve config.path.External, 'include'
-    '-I' + path.resolve config.path.Source
-    '-I' + path.resolve config.path.GeneratedSourceOutput
-    '-I' + path.resolve config.path.Source,'angelscript'
-    '-I' + path.resolve config.path.Source,'component'
-    '-I/usr/local/include'
-    '-I/usr/include'
+    path.resolve config.path.External, 'include'
+    path.resolve config.path.Source
+    path.resolve config.path.GeneratedSourceOutput
+    path.resolve config.path.Source,'angelscript'
+    path.resolve config.path.Source,'component'
+    '/usr/local/include'
+    '/usr/include'
   ]
   config.linkerDirectories = [
-    '-L' + path.resolve config.path.External
-    '-L' + path.resolve config.path.External, 'lib'
-    '-L/usr/local/lib'
-    '-L/usr/lib'
+    path.resolve config.path.External
+    path.resolve config.path.External, 'lib'
+    '/usr/local/lib'
+    '/usr/lib'
   ]
 
   # overwrite the default config values
@@ -170,7 +171,6 @@ Configure = (done)->
   config.pathroots = []
   # assign pathroots for .o files in compiled object dir
   for k,v of config.path
-    console.log 'PATH: '+k+' '+v
     if k != 'root'
       if v?
         if path.isAbsolute v
@@ -181,8 +181,13 @@ Configure = (done)->
           # config.sourceGlobs.push path.resolve( config.path.root, v, config.sourceGlob )
           config.pathroots.push path.resolve( config.path.root, v)
 
-  console.log config
-  console.log 'Configured for platform: ' + config.targetPlatform
+  # console.log config
+  console.log 'Configured for target platform: ' + config.targetPlatform
+  # define the external library setup task based on config.external
+  if config.external.length > 0
+    gulp.task 'setup', gulp.series config.external
+  fs.mkdirsSync path.resolve(config.path.External)
+  fs.mkdirsSync path.resolve(config.path.Download)
   done()
 
 
@@ -192,6 +197,8 @@ Start = (done)->
 
 Download = (url,filepath)->
   return new Promise (resolve, reject)->
+    # fs.mkdirs path.resolve( config.path.Download ), (err) ->
+    #   if err then reject( 'create dir failed: '+err ); return
     console.log 'Downloading '+url
     request.get url
     .on 'response', (rsp)->
@@ -204,24 +211,27 @@ Download = (url,filepath)->
         console.log 'Finished downloading to '+filepath
         resolve()
       .on 'error', (err)->
-        reject('Error writing file: '+err)
+        reject('Error downloading file: '+err)
 
 box2d = ()->
-  # return Download('https://codeload.github.com/erincatto/Box2D/tar.gz/v2.3.1','box2d.tar.gz')
-  return (new Promise (resolve,reject) -> resolve())
+  version='2.3.1'
+  return Download('https://codeload.github.com/erincatto/Box2D/tar.gz/v2.3.1','box2d.tar.gz')
   .then ()-> return tar.extract {file:path.resolve(config.path.Download,'box2d.tar.gz'),cwd:config.path.Download }, (err, stdout, stderr) -> console.log 'tar extract done'
   .then ()-> return new Promise (resolve,reject) ->
+    console.log 'building box2d...'
     exec 'cmake -G "Unix Makefiles" -DBOX2D_INSTALL=OFF -DBOX2D_BUILD_SHARED=OFF -DBOX2D_BUILD_EXAMPLES=OFF ..', {cwd:path.resolve(config.path.Download,'Box2D-2.3.1','Box2D','Build')}, (err, stdout, stderr) ->
       if err then reject( 'cmake failed: '+err ); return
-      exec 'cp -r Box2D '+path.resolve(config.path.External,'include'), {cwd:path.resolve(config.path.Download,'Box2D-2.3.1','Box2D')}, (err, stdout, stderr) ->
-        if err then reject( 'cp failed: '+err ); return
-        exec 'make config="debug"', {cwd:path.resolve(config.path.Download,'Box2D-2.3.1','Box2D','Build')}, (err, stdout, stderr) ->
-          if err then reject( 'make config failed: '+err ); return
-          exec 'cp libBox2D.a '+path.resolve(config.path.External,'lib'), {cwd:path.resolve(config.path.Download,'Box2D-2.3.1','Box2D','Build','Box2D')}, (err, stdout, stderr) ->
-            if err then reject( 'cp failed: '+err ); return
-            resolve()
+      fs.copySync path.resolve(config.path.Download,'Box2D-2.3.1','Box2D','Box2D'), path.resolve(config.path.External,'include','Box2D')
+      exec 'make config="debug"', {cwd:path.resolve(config.path.Download,'Box2D-2.3.1','Box2D','Build')}, (err, stdout, stderr) ->
+        if err then reject( 'make config failed: '+err ); return
+        fs.copySync path.resolve(config.path.Download,'Box2D-2.3.1','Box2D','Build','Box2D','libBox2D.a'), path.resolve(config.path.External,'lib','libBox2D.a')
+        #fs.removeSync path.resolve(config.path.Download,'Box2D-2.3.1')
+        resolve()
   .catch (reason)-> console.error reason
+# register task
+gulp.task 'box2d', box2d
 
+###
 sdl_build = ()->
   SDL='SDL-2.0.4-10002'
   # return Download('https://www.libsdl.org/tmp/'+SDL+'.tar.gz',SDL+'.tar.gz')
@@ -249,39 +259,52 @@ sdl_build = ()->
     #   #cp build/.libs/libSDL2.a ../../$SYSTEM
     #   #cp include/* ../../$SYSTEM/include
     #   #cp ../include/* ../../$SYSTEM/include
-sdl = ()->
-  return new Promise (resolve,reject) ->
-    resolve()
+###
+
 glm = ()->
-  return new Promise (resolve,reject) ->
+  version = '0.9.8.4'
+  zipFile='glm-'+version+'.zip'
+  return Download('https://github.com/g-truc/glm/archive/'+version+'.zip', zipFile )
+  .then ()-> decompress path.resolve(config.path.Download,zipFile), config.path.Download
+  .then ()-> return new Promise (resolve,reject) ->
+    fs.copySync path.resolve(config.path.Download,'glm-'+version+'/glm'), path.resolve(config.path.External,'include','glm')
+    fs.removeSync path.resolve(config.path.Download,'glm-'+version)
+    fs.removeSync path.resolve(config.path.Download,zipFile)
     resolve()
+# register task
+gulp.task 'glm', glm
+
 json = ()->
-  return new Promise (resolve,reject) ->
-    resolve()
-mojosetup = ()->
-  return new Promise (resolve,reject) ->
-    resolve()
+  version='3.1.2'
+  return Download( 'https://github.com/nlohmann/json/releases/download/v'+version+'/json.hpp', "json.hpp" )
+  .then ()-> fs.copy( path.resolve(config.path.Download,'json.hpp'), path.resolve(config.path.External,'include','json.hpp') )
+# register task
+gulp.task 'json', json
+
+# TODO
 angelscript = ()->
   return new Promise (resolve,reject) ->
     resolve()
+# register task
+gulp.task 'angelscript', angelscript
 
-Setup = ()->
-  ray = []
-  return new Promise (resolve, reject)->
-    for ekey,evalue of config.external
-      console.log evalue
-      switch evalue
-        when 'sdl' then ray.push sdl; break
-        when 'sdl-build' then ray.push sdl_build; break
-        when 'box2d' then ray.push box2d; break
-        when 'glm' then ray.push glm; break
-        when 'json' then ray.push json; break
-        when 'angelscript' then break
-        when 'mojosetup' then break
-        else console.log 'Unknown external '+evalue
-    console.log 'done processing ext'
-    resolve()
-  .then gulp.series ray
+physfs = ()->
+  return Download 'https://hg.icculus.org/icculus/physfs/archive/tip.tar.gz', 'physfs.tar.gz'
+  .then ()-> decompress path.resolve(config.path.Download,'physfs.tar.gz'), path.resolve(config.path.Download,'physfs'), {strip:1}
+  .then ()-> new Promise (resolve,reject) ->
+    # fs.removeSync path.resolve(config.path.Download,'physfs.tar.gz')
+    fs.mkdirsSync path.resolve(config.path.Download,'physfs','build')
+    cmakeCommand = 'cmake -DPHYSFS_ARCHIVE_ZIP=false -DPHYSFS_ARCHIVE_WAD=false -DPHYSFS_ARCHIVE_QPAK=false -DPHYSFS_ARCHIVE_MVL=false -DPHYSFS_ARCHIVE_HOG=false -DPHYSFS_HAVE_CDROM_SUPPORT=false -DPHYSFS_BUILD_TEST=false -DPHYSFS_BUILD_STATIC=true -DPHYSFS_BUILD_SHARED=false -DPHYSFS_ARCHIVE_7Z=false ..'
+    exec cmakeCommand, {cwd:path.resolve(config.path.Download,'physfs', 'build')}, (err, stdout, stderr) ->
+      if err then reject( 'cmake failed: '+err ); return
+      exec 'make', {cwd:path.resolve(config.path.Download,'physfs', 'build')}, (err, stdout, stderr) ->
+        if err then reject( 'cmake failed: '+err ); return
+        fs.copySync path.resolve(config.path.Download,'physfs', 'build','libphysfs.a'), path.resolve(config.path.External,'lib','libphysfs.a')
+        fs.copySync path.resolve(config.path.Download,'physfs','src','physfs.h'), path.resolve(config.path.External,'include','physfs.h')
+        # fs.removeSync path.resolve(config.path.Download,'physfs')
+        resolve()
+# register task
+gulp.task 'physfs', physfs
 
 Clean = (done)->
   if fs.existsSync config.path.Obj
@@ -336,7 +359,9 @@ CompileAll = ()->
 
     comp = [] #['-g','-x c++','-std=c++11']
     comp.push config.compilerDefines.join(' ')
-    comp.push config.includeDirectories.join(' ')
+    includeDirs = config.includeDirectories.map (x) -> return '-I'+x
+    comp.push includeDirs.join(' ')
+
     total = sourceFiles.length
     count = total
     for f in sourceFiles
@@ -383,7 +408,10 @@ PrimeCache = ()->
 CompileIncremental = (done)->
   comp = [] #['-g','-x c++','-std=c++11']
   comp.push config.compilerDefines.join(' ')
-  comp.push config.includeDirectories.join(' ')
+
+  includeDirs = config.includeDirectories.map (x) -> return '-I'+x
+  comp.push includeDirs.join(' ')
+
   command = 'clang++ -x c++ -g -c - -o - '+comp.join(' ')
   return gulp.src config.sourceGlobs
   .pipe cache 'source' #, {optimizeMemory:true}
@@ -397,7 +425,10 @@ CompileIncremental = (done)->
 Link = (done)->
   link = []
   linkerArgs = config.linkerArgs.slice()
-  linkerArgs.push config.linkerDirectories
+
+  linkerDirs = config.linkerDirectories.map (x) -> return '-L'+x
+  linkerArgs.push linkerDirs
+
   link.push '-Wl,' + linkerArgs.join(',')
   if config.targetPlatform == 'darwin'
     link.push config.frameworks.join(' ')
@@ -426,7 +457,8 @@ Build = gulp.series Prebuild, CompileAll, Link
 
 gulp.task 'default', gulp.series Configure, Start #, watcher
 gulp.task 'config', Configure
-gulp.task 'setup', Setup
+# setup is defined in Configure so libraries can be added easily to config file
+# gulp.task 'setup', Setup
 gulp.task 'watch', watcher
 gulp.task 'clean', Clean
 gulp.task 'link', Link
