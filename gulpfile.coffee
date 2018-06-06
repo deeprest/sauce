@@ -181,7 +181,7 @@ Configure = (done)->
           # config.sourceGlobs.push path.resolve( config.path.root, v, config.sourceGlob )
           config.pathroots.push path.resolve( config.path.root, v)
 
-  # console.log config
+  console.log config
   console.log 'Configured for target platform: ' + config.targetPlatform
   # define the external library setup task based on config.external
   if config.external.length > 0
@@ -434,12 +434,14 @@ Link = (done)->
     link.push config.frameworks.join(' ')
   objectFiles = glob.sync config.path.Obj+'/**/*.o'
   linkCommand = ['clang++ -g', objectFiles.join(' '), link.join(' '),  '-o', path.resolve( config.path.Output, config.outputExecutableName) ].join(' ')
-  # console.log linkCommand
+  console.log linkCommand
   exec linkCommand, (err, stdout, stderr) ->
     console.log stdout
     console.log stderr
     if err then console.error 'LINK ERROR: '+err
     else if config.targetPlatform == 'darwin'
+      # fs.copySync path.resolve(config.path.External,'lib','libSDL2-2.0.0.dylib'), path.resolve(config.path.Output,'libSDL2-2.0.0.dylib')
+      # fs.copySync path.resolve(config.path.External,'lib','libSDL2_image-2.0.0.dylib'), path.resolve(config.path.Output,'libSDL2_image-2.0.0.dylib')
       exec 'dsymutil -o '+path.resolve(config.path.Output, config.outputExecutableName)+'.dSYM '+path.resolve(config.path.Output, config.outputExecutableName),
       {maxBuffer: 1024 * 1024},
       (err, stdout, stderr) ->
