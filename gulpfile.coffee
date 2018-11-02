@@ -165,10 +165,11 @@ Configure = (done)->
     component['lowerName'] = component.type.toLowerCase()
 
   config.sourceGlobs.push path.resolve( config.path.Source, config.sourceGlob )
-  #config.sourceGlobs.push path.resolve( config.path.External, config.sourceGlob )
+  config.sourceGlobs.push path.resolve( config.path.External, "src/**/*.cpp" )
 
   # keep roots for .o file paths
-  config.pathroots = []
+  config.pathroots = [ config.path.Root ]
+  ###
   # assign pathroots for .o files in compiled object dir
   for k,v of config.path
     if k != 'root'
@@ -180,7 +181,7 @@ Configure = (done)->
           console.log 'relative: '+v
           # config.sourceGlobs.push path.resolve( config.path.root, v, config.sourceGlob )
           config.pathroots.push path.resolve( config.path.root, v)
-
+  ###
   console.log config
   console.log 'Configured for target platform: ' + config.targetPlatform
   # define the external library setup task based on config.external
@@ -233,20 +234,22 @@ gulp.task 'box2d', box2d
 
 ###
 sdl_build = ()->
-  SDL='SDL-2.0.4-10002'
-  # return Download('https://www.libsdl.org/tmp/'+SDL+'.tar.gz',SDL+'.tar.gz')
-  # .then ()-> return tar.extract {file:path.resolve(config.path.Download,SDL+'.tar.gz'),cwd:config.path.Download }, (err, stdout, stderr) -> console.log 'tar extract done'
-  return new Promise (resolve,reject) ->
-  # .then ()-> return new Promise (resolve,reject) ->
+  SDL='SDL2-2.0.8'
+  #return Download('https://www.libsdl.org/release/'+SDL+'.tar.gz',SDL+'.tar.gz')
+  #.then ()->
+  return tar.extract {file:path.resolve(config.path.Download,SDL+'.tar.gz'),cwd:config.path.Download }, (err, stdout, stderr) -> console.log 'tar extract done'
+  #return new Promise (resolve,reject) ->
+  .then ()-> return new Promise (resolve,reject) ->
     buildDir = path.resolve(config.path.Download,SDL,'build-'+config.targetPlatform)
     fs.mkdir buildDir, (err)->
-      #if err then reject(err); return
+      # if err then reject(err); return
       switch config.targetPlatform
         when 'linux'
           #'../configure --prefix=$DIR_LIB; make clean; make; make install'
           break
         when 'darwin'
           #; make clean; make
+          console.log 'START BUILD...'
           spawn '../configure', {shell:true,cwd:buildDir,env:{'CC':path.resolve(SDL,'build-scripts/gcc-fat.sh')}}, (err, stdout, stderr) ->
             if err then reject( 'sdl build failed: '+err ); return
             spawn 'make clean; make', {shell:true,cwd:buildDir}, (err, stdout, stderr) ->
@@ -259,6 +262,7 @@ sdl_build = ()->
     #   #cp build/.libs/libSDL2.a ../../$SYSTEM
     #   #cp include/* ../../$SYSTEM/include
     #   #cp ../include/* ../../$SYSTEM/include
+gulp.task 'sdl', sdl_build
 ###
 
 glm = ()->
@@ -352,7 +356,9 @@ CompileAll = ()->
     if fs.existsSync(config.path.Obj) == false
       mkdirSync config.path.Obj
     sourceFiles = []
+    console.log "sourceglobs"
     for sf in config.sourceGlobs
+      console.log sf
       sourceFiles = sourceFiles.concat glob.sync(sf)
     console.log 'SOURCEFILES:'
     console.log sourceFiles
@@ -365,20 +371,13 @@ CompileAll = ()->
     total = sourceFiles.length
     count = total
     for f in sourceFiles
-      # console.log 'sourcefile: '+f
-      relpath = f
-      for k,v of config.pathroots
-        if f.indexOf(v)>=0
-          relpath = path.relative v, f
-          break
-      if relpath.length == 0
-        count--;
-        continue
-      dir = path.dirname( path.resolve(config.path.Obj, relpath ))
-      if fs.existsSync( dir)== false
-        mkdirSync dir
-      finalPath = path.resolve( config.path.Obj, path.dirname(relpath), path.basename(relpath,'.cpp')+'.o')
-      # console.log 'finalPath: '+finalPath
+      finalPath = path.resolve( config.path.Obj, path.dirname(path.relative(config.path.Root,f)), path.basename(f,'.cpp')+'.o' )
+      console.log 'finalPath: '+finalPath
+      # console.log path.relative(config.path.Root,f)
+      # continue
+      if fs.existsSync( path.dirname(finalPath) )== false
+        mkdirSync path.dirname(finalPath)
+
       command = 'clang++ -g -c -o '+finalPath+' '+f+' '+comp.join(' ')
       exec command, {maxBuffer: 1024 * 1024}, (err, stdout, stderr) ->
         if stdout.length > 0
@@ -413,10 +412,10 @@ CompileIncremental = (done)->
   comp.push includeDirs.join(' ')
 
   command = 'clang++ -x c++ -g -c - -o - '+comp.join(' ')
-  return gulp.src config.sourceGlobs
+  return gulp.src config.sourceGlobs, { base: config.path.Root }
   .pipe cache 'source' #, {optimizeMemory:true}
   .pipe print (filepath)-> return 'changed: '+filepath
-  # .pipe gulp.dest config.path.Cache #no reason to write out the cache without a read somewhere
+  # .pipe gulp.dest config.path.Cache #there is no reason to write out the cache without a read somewhere
   .pipe run( command, {silent:true})
   .pipe rename { extname: '.o'}
   .pipe print (filepath)-> return 'compiled: '+filepath
@@ -425,10 +424,8 @@ CompileIncremental = (done)->
 Link = (done)->
   link = []
   linkerArgs = config.linkerArgs.slice()
-
   linkerDirs = config.linkerDirectories.map (x) -> return '-L'+x
   linkerArgs.push linkerDirs
-
   link.push '-Wl,' + linkerArgs.join(',')
   if config.targetPlatform == 'darwin'
     link.push config.frameworks.join(' ')
