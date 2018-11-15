@@ -84,7 +84,6 @@ ConfigObject = ()->
   ]
   this.external = []
   this.linkerArgs = []
-  this.sourceGlob = '**/*.cpp'
   this.watchGlob = '{**/*.cpp,**/*.h,**/*.mustache}'
   this.assetGlob = '**/*@(.png|.ogg|.json|.as|.frag|.vert)'
   this.sourceGlobs = []
@@ -135,10 +134,12 @@ Configure = (done)->
 
   config.includeDirectories = [
     path.resolve config.path.External, 'include'
+    path.resolve config.path.External, 'include', 'SDL2'
     path.resolve config.path.Source
     path.resolve config.path.GeneratedSourceOutput
     path.resolve config.path.Source,'angelscript'
     path.resolve config.path.Source,'component'
+    '/usr/local/include/SDL2'
     '/usr/local/include'
     '/usr/include'
   ]
@@ -164,24 +165,11 @@ Configure = (done)->
   for component in config.mustache.context.Components
     component['lowerName'] = component.type.toLowerCase()
 
-  config.sourceGlobs.push path.resolve( config.path.Source, config.sourceGlob )
-  config.sourceGlobs.push path.resolve( config.path.External, "src/**/*.cpp" )
+  config.sourceGlobs.push path.resolve( config.path.Source, '**/*.cpp' )
+  config.sourceGlobs.push path.resolve( config.path.External, "src", '**/*.cpp' )
 
   # keep roots for .o file paths
   config.pathroots = [ config.path.Root ]
-  ###
-  # assign pathroots for .o files in compiled object dir
-  for k,v of config.path
-    if k != 'root'
-      if v?
-        if path.isAbsolute v
-          # config.sourceGlobs.push path.resolve( v, config.sourceGlob )
-          config.pathroots.push v
-        else
-          console.log 'relative: '+v
-          # config.sourceGlobs.push path.resolve( config.path.root, v, config.sourceGlob )
-          config.pathroots.push path.resolve( config.path.root, v)
-  ###
   console.log config
   console.log 'Configured for target platform: ' + config.targetPlatform
   # define the external library setup task based on config.external
@@ -298,7 +286,7 @@ physfs = ()->
   .then ()-> new Promise (resolve,reject) ->
     # fs.removeSync path.resolve(config.path.Download,'physfs.tar.gz')
     fs.mkdirsSync path.resolve(config.path.Download,'physfs','build')
-    cmakeCommand = 'cmake -DPHYSFS_ARCHIVE_ZIP=false -DPHYSFS_ARCHIVE_WAD=false -DPHYSFS_ARCHIVE_QPAK=false -DPHYSFS_ARCHIVE_MVL=false -DPHYSFS_ARCHIVE_HOG=false -DPHYSFS_HAVE_CDROM_SUPPORT=false -DPHYSFS_BUILD_TEST=false -DPHYSFS_BUILD_STATIC=true -DPHYSFS_BUILD_SHARED=false -DPHYSFS_ARCHIVE_7Z=false ..'
+    cmakeCommand = 'cmake -DPHYSFS_ARCHIVE_ZIP=true -DPHYSFS_ARCHIVE_WAD=false -DPHYSFS_ARCHIVE_GRP=false -DPHYSFS_ARCHIVE_QPAK=false -DPHYSFS_ARCHIVE_MVL=false -DPHYSFS_ARCHIVE_HOG=false -DPHYSFS_HAVE_CDROM_SUPPORT=false -DPHYSFS_BUILD_TEST=false -DPHYSFS_BUILD_STATIC=true -DPHYSFS_BUILD_SHARED=false -DPHYSFS_ARCHIVE_7Z=false ..'
     exec cmakeCommand, {cwd:path.resolve(config.path.Download,'physfs', 'build')}, (err, stdout, stderr) ->
       if err then reject( 'cmake failed: '+err ); return
       exec 'make', {cwd:path.resolve(config.path.Download,'physfs', 'build')}, (err, stdout, stderr) ->
@@ -371,6 +359,7 @@ CompileAll = ()->
     total = sourceFiles.length
     count = total
     for f in sourceFiles
+      # fs.copySync f, path.resolve( config.path.Cache, path.dirname(path.relative(config.path.Root,f)), path.basename(f) )
       finalPath = path.resolve( config.path.Obj, path.dirname(path.relative(config.path.Root,f)), path.basename(f,'.cpp')+'.o' )
       console.log 'finalPath: '+finalPath
       # console.log path.relative(config.path.Root,f)
@@ -400,9 +389,11 @@ CompileAll = ()->
 
 
 PrimeCache = ()->
-  return gulp.src config.sourceGlobs
+  return gulp.src config.sourceGlobs, { base: config.path.Root }
+  # return gulp.src path.resolve( config.path.Cache, '**/*.cpp'), { base: config.path.Root }
   # .pipe rename { extname:'.cache' }
   .pipe cache 'source'
+  .pipe print (filepath)-> return 'primed cache: '+filepath
 
 CompileIncremental = (done)->
   comp = [] #['-g','-x c++','-std=c++11']
@@ -413,13 +404,14 @@ CompileIncremental = (done)->
 
   command = 'clang++ -x c++ -g -c - -o - '+comp.join(' ')
   return gulp.src config.sourceGlobs, { base: config.path.Root }
+  # .pipe rename { extname: '.cache'}
   .pipe cache 'source' #, {optimizeMemory:true}
   .pipe print (filepath)-> return 'changed: '+filepath
-  # .pipe gulp.dest config.path.Cache #there is no reason to write out the cache without a read somewhere
+  # .pipe gulp.dest config.path.Cache
   .pipe run( command, {silent:true})
   .pipe rename { extname: '.o'}
-  .pipe print (filepath)-> return 'compiled: '+filepath
   .pipe gulp.dest config.path.Obj
+  .pipe print (filepath)-> return 'compiled: '+filepath
 
 Link = (done)->
   link = []
@@ -461,6 +453,6 @@ gulp.task 'config', Configure
 gulp.task 'watch', watcher
 gulp.task 'clean', Clean
 gulp.task 'link', Link
-gulp.task 'rebuild', gulp.series Clean, Prebuild, PrimeCache, CompileAll, Link
+gulp.task 'rebuild', gulp.series Clean, Prebuild, CompileAll, PrimeCache, Link
 gulp.task 'build', gulp.series Prebuild, CompileIncremental, Link
 gulp.task 'launch', gulp.series gulp.parallel(CSON, Assets), Launch
