@@ -1,5 +1,5 @@
 # Sauce
-Nodejs-based local development tool for a C++ game project. Linux and MacOS supported.
+My personal Nodejs-based local development tool for C++ gamedev. Linux and MacOS supported.
 
 Features:
 * build tool
