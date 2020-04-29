@@ -281,12 +281,17 @@ angelscript = ()->
 gulp.task 'angelscript', angelscript
 
 physfs = ()->
-  return Download 'https://hg.icculus.org/icculus/physfs/archive/tip.tar.gz', 'physfs.tar.gz'
+  # latest: https://hg.icculus.org/icculus/physfs/archive/tip.tar.gz
+  return Download 'https://hg.icculus.org/icculus/physfs/archive/release-3.0.1.tar.gz', 'physfs.tar.gz'
   .then ()-> decompress path.resolve(config.path.Download,'physfs.tar.gz'), path.resolve(config.path.Download,'physfs'), {strip:1}
   .then ()-> new Promise (resolve,reject) ->
     # fs.removeSync path.resolve(config.path.Download,'physfs.tar.gz')
     fs.mkdirsSync path.resolve(config.path.Download,'physfs','build')
-    cmakeCommand = 'cmake -DPHYSFS_ARCHIVE_ZIP=true -DPHYSFS_ARCHIVE_WAD=false -DPHYSFS_ARCHIVE_GRP=false -DPHYSFS_ARCHIVE_QPAK=false -DPHYSFS_ARCHIVE_MVL=false -DPHYSFS_ARCHIVE_HOG=false -DPHYSFS_HAVE_CDROM_SUPPORT=false -DPHYSFS_BUILD_TEST=false -DPHYSFS_BUILD_STATIC=true -DPHYSFS_BUILD_SHARED=false -DPHYSFS_ARCHIVE_7Z=false ..'
+    cmakeCommand = 'cmake -DPHYSFS_ARCHIVE_ZIP=true
+    -DPHYSFS_ARCHIVE_SLB=false -DPHYSFS_ARCHIVE_ISO9660=false -DPHYSFS_ARCHIVE_VDF=false
+    -DPHYSFS_ARCHIVE_WAD=false -DPHYSFS_ARCHIVE_GRP=false -DPHYSFS_ARCHIVE_QPAK=false -DPHYSFS_ARCHIVE_MVL=false
+    -DPHYSFS_ARCHIVE_HOG=false -DPHYSFS_HAVE_CDROM_SUPPORT=false -DPHYSFS_BUILD_TEST=false -DPHYSFS_BUILD_STATIC=true
+    -DPHYSFS_BUILD_SHARED=false -DPHYSFS_ARCHIVE_7Z=false ..'
     exec cmakeCommand, {cwd:path.resolve(config.path.Download,'physfs', 'build')}, (err, stdout, stderr) ->
       if err then reject( 'cmake failed: '+err ); return
       exec 'make', {cwd:path.resolve(config.path.Download,'physfs', 'build')}, (err, stdout, stderr) ->
@@ -317,6 +322,12 @@ Assets = (done)->
   .pipe gulp.dest( config.path.Output )
   .on 'finish', ()-> done()
 
+ForceAssets = (done)->
+  return gulp.src config.assetGlob, {cwd:path.resolve(config.path.Asset), ignoreInitial:false }
+  .pipe print( (filepath)=> return 'Asset copied: '+filepath )
+  .pipe gulp.dest( config.path.Output )
+  .on 'finish', ()-> done()
+
 CSON = (done)->
   return gulp.src '**/*.cson', {cwd:path.resolve(config.path.Asset), ignoreInitial:false }
   .pipe cache 'cson'
@@ -343,6 +354,8 @@ CompileAll = ()->
   return new Promise (resolve, reject)->
     if fs.existsSync(config.path.Obj) == false
       mkdirSync config.path.Obj
+    if fs.existsSync(config.path.Output) == false
+      mkdirSync config.path.Output
     sourceFiles = []
     console.log "sourceglobs"
     for sf in config.sourceGlobs
@@ -361,9 +374,7 @@ CompileAll = ()->
     for f in sourceFiles
       # fs.copySync f, path.resolve( config.path.Cache, path.dirname(path.relative(config.path.Root,f)), path.basename(f) )
       finalPath = path.resolve( config.path.Obj, path.dirname(path.relative(config.path.Root,f)), path.basename(f,'.cpp')+'.o' )
-      console.log 'finalPath: '+finalPath
-      # console.log path.relative(config.path.Root,f)
-      # continue
+      # console.log 'finalPath: '+finalPath
       if fs.existsSync( path.dirname(finalPath) )== false
         mkdirSync path.dirname(finalPath)
 
@@ -437,22 +448,40 @@ Link = (done)->
         if err then console.error err
     done()
 
+app=null
+
 Launch = (done)->
   app = spawn path.resolve(config.path.Output, config.outputExecutableName), [], {cwd:config.path.Output, stdio:'inherit'}
   app.on 'close', (code) ->
     console.log 'child process exited with code '+code
     done()
 
+LaunchBreak = (done)->
+  app = spawn path.resolve(config.path.Output, config.outputExecutableName), ['DEBUGBREAK'], {cwd:config.path.Output, stdio:'inherit'}
+  app.on 'close', (code) ->
+    console.log 'child process exited with code '+code
+    done()
+
+LaunchContinue = (done)->
+  console.log 'continuing...'
+  app.kill('SIGINT')
+  done()
+
 Prebuild = gulp.parallel Mustache, CSON, Assets
 Build = gulp.series Prebuild, CompileAll, Link
 
+#gulp.task 'prebuild', Prebuild
 gulp.task 'default', gulp.series Configure, Start #, watcher
 gulp.task 'config', Configure
 # setup is defined in Configure so libraries can be added easily to config file
 # gulp.task 'setup', Setup
 gulp.task 'watch', watcher
+gulp.task 'assets', ForceAssets
 gulp.task 'clean', Clean
 gulp.task 'link', Link
 gulp.task 'rebuild', gulp.series Clean, Prebuild, CompileAll, PrimeCache, Link
 gulp.task 'build', gulp.series Prebuild, CompileIncremental, Link
 gulp.task 'launch', gulp.series gulp.parallel(CSON, Assets), Launch
+
+gulp.task 'lb', gulp.series gulp.parallel(CSON, Assets), LaunchBreak
+gulp.task 'lc', LaunchContinue

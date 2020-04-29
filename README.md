@@ -6,7 +6,7 @@ Features:
 * asset processor
 * source preprocessor
 * script bindings generator
-* library updater/builder. 
+* library updater/builder.
 
 #### What it does
 * [Gulp](https://gulpjs.com/) for task management
@@ -19,12 +19,11 @@ Features:
 * Incremental builds
 * Builds can be triggered by source changes
 
-#### Todo (what it does not do, yet)
+#### Todo
 * Generate installer packages using mojosetup
 * Add compiler defines and linker args to build.cson based on externals.
 * Re-test AngelScript binding generator
 * example project
-* do something with output from launch (game.log)
 * write/read the file cache to support caching in between runs
 
 ## Details
